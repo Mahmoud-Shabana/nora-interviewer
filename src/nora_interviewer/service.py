@@ -298,6 +298,17 @@ class InterviewService:
         if len(session.tools) >= job.max_tools:
             raise HTTPException(409, "Job tool budget has been exhausted")
 
+        used_templates = {
+            str(tool.payload.get("template_id"))
+            for tool in session.tools
+            if tool.payload.get("template_id")
+        }
+        if request.template_id in used_templates:
+            raise HTTPException(
+                409,
+                f"Tool template already used in this session: {request.template_id}",
+            )
+
         policy = {item.template_id: item for item in job.tool_templates}
         allowed = policy.get(request.template_id)
         if allowed is None:
