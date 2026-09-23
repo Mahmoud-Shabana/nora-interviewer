@@ -51,6 +51,11 @@ def test_capability_description_contains_backends_not_secrets(monkeypatch):
         capabilities.streaming_tts_backend
         == "DisabledStreamingTtsProvider"
     )
+    assert capabilities.rubric_drafter_enabled is False
+    assert (
+        capabilities.rubric_drafter_backend
+        == "DisabledRubricDrafter"
+    )
 
     serialized = capabilities.model_dump_json()
     assert "API_KEY" not in serialized
