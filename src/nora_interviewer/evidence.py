@@ -81,6 +81,18 @@ class EvidenceGraph:
         if turn is None:
             raise ValueError("evidence observation references unknown turn")
 
+        if observation.quote is not None and observation.quote not in turn.text:
+            raise ValueError(
+                "evidence quote must be a literal substring of the referenced turn"
+            )
+        if (
+            observation.source.startswith("semantic_judge:")
+            and observation.state is EvidenceState.VERIFIED
+        ):
+            raise ValueError(
+                "semantic transcript judges may not emit verified evidence"
+            )
+
         node = session.evidence_graph.setdefault(
             observation.competency_id,
             CompetencyEvidence(competency_id=observation.competency_id),
