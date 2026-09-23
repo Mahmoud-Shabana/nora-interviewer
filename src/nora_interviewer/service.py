@@ -5,11 +5,15 @@ from time import perf_counter
 from fastapi import HTTPException
 
 from .audit import append_event
+from .controls import handle_candidate_control
 from .evidence import EvidenceGraph
 from .feedback import CandidateFeedbackReport, build_candidate_feedback
 from .models import (
     CandidateAppeal,
     CandidateAppealRequest,
+    CandidateControlKind,
+    CandidateControlRequest,
+    CandidateControlResult,
     CreateSession,
     EvidenceObservation,
     EventType,
@@ -22,6 +26,11 @@ from .models import (
     SessionStatus,
     SessionStep,
     Speaker,
+    ToolEvaluation,
+    ToolInvocation,
+    ToolStatus,
+    ToolSubmission,
+    ToolSubmissionRequest,
     TranscriptCorrectionRequest,
     TranscriptRevision,
     Turn,
@@ -31,6 +40,7 @@ from .planner import DualLanePlanner
 from .providers.base import InterviewBrain
 from .replay import ReplayState, replay_events
 from .storage import InMemoryStore
+from .tools import ToolRegistry, default_tool_registry
 
 
 class InterviewService:
@@ -39,10 +49,12 @@ class InterviewService:
         store: InMemoryStore,
         brain: InterviewBrain,
         planner: DualLanePlanner | None = None,
+        tool_registry: ToolRegistry | None = None,
     ) -> None:
         self.store = store
         self.brain = brain
         self.planner = planner or DualLanePlanner()
+        self.tool_registry = tool_registry or default_tool_registry()
 
     async def create_job(self, job: JobSpec) -> JobSpec:
         await self.store.put_job(job)
@@ -105,9 +117,17 @@ class InterviewService:
             session, job = await self._get(session_id)
         if session.status is SessionStatus.COMPLETED:
             raise HTTPException(409, "Interview is already complete")
+        if session.paused:
+            raise HTTPException(409, "Interview is paused; send a resume candidate control first.")
 
         previous_question = next(
-            (turn for turn in reversed(session.turns) if turn.speaker is Speaker.INTERVIEWER),
+            (
+                turn
+                for turn in reversed(session.turns)
+                if turn.speaker is Speaker.INTERVIEWER
+                and not turn.metadata.get("non_evaluative")
+                and not turn.metadata.get("candidate_control")
+            ),
             None,
         )
         candidate = Turn(
@@ -164,6 +184,143 @@ class InterviewService:
 
         await self.store.put_session(session)
         return SessionStep(session_id=session.id, status=session.status, interviewer_turn=interviewer)
+
+    async def candidate_control(
+        self,
+        session_id: str,
+        request: CandidateControlRequest,
+    ) -> CandidateControlResult:
+        session, _ = await self._get(session_id)
+        if session.status is SessionStatus.COMPLETED:
+            raise HTTPException(409, "Interview is already complete")
+
+        try:
+            result = handle_candidate_control(session, request)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+        append_event(
+            session,
+            EventType.CANDIDATE_CONTROL,
+            payload={
+                "kind": request.kind.value,
+                "text": request.text,
+                "target_turn_id": result.target_turn_id,
+                "pauses_interview": result.pauses_interview,
+            },
+        )
+
+        if result.interviewer_turn:
+            session.turns.append(result.interviewer_turn)
+            append_event(
+                session,
+                EventType.INTERVIEWER_TURN,
+                turn=result.interviewer_turn,
+                payload={
+                    "candidate_control": request.kind.value,
+                    "non_evaluative": True,
+                },
+            )
+
+        if (
+            request.kind is CandidateControlKind.CORRECT_LAST_ANSWER
+            and result.target_turn_id
+            and request.text
+        ):
+            await self.correct_transcript(
+                session_id,
+                TranscriptCorrectionRequest(
+                    turn_id=result.target_turn_id,
+                    corrected_text=request.text,
+                    reason="Candidate correction requested during live interview.",
+                ),
+            )
+
+        await self.store.put_session(session)
+        return result
+
+    async def open_tool(
+        self,
+        session_id: str,
+        invocation: ToolInvocation,
+    ) -> ToolInvocation:
+        session, job = await self._get(session_id)
+        if session.status is SessionStatus.COMPLETED:
+            raise HTTPException(409, "Interview is already complete")
+        if any(tool.id == invocation.id for tool in session.tools):
+            raise HTTPException(409, "Tool invocation id already exists")
+
+        known_competencies = {competency.id for competency in job.competencies}
+        unknown = [tag for tag in invocation.competency_tags if tag not in known_competencies]
+        if unknown:
+            raise HTTPException(400, f"Tool references unknown competencies: {unknown}")
+
+        if invocation.opened_from_turn_id:
+            known_turns = {turn.id for turn in session.turns}
+            if invocation.opened_from_turn_id not in known_turns:
+                raise HTTPException(400, "Tool references unknown opening turn")
+
+        session.tools.append(invocation)
+        append_event(
+            session,
+            EventType.TOOL_OPENED,
+            payload={
+                "tool_id": invocation.id,
+                "kind": invocation.kind.value,
+                "competency_tags": invocation.competency_tags,
+                "opened_from_turn_id": invocation.opened_from_turn_id,
+            },
+        )
+        await self.store.put_session(session)
+        return invocation
+
+    async def submit_tool(
+        self,
+        session_id: str,
+        tool_id: str,
+        request: ToolSubmissionRequest,
+    ) -> ToolEvaluation:
+        session, job = await self._get(session_id)
+        invocation = next((tool for tool in session.tools if tool.id == tool_id), None)
+        if invocation is None:
+            raise HTTPException(404, "Tool invocation not found")
+        if invocation.status is not ToolStatus.OPEN:
+            raise HTTPException(409, f"Tool is not open: {invocation.status.value}")
+
+        submission = ToolSubmission(tool_id=tool_id, content=request.content)
+        session.tool_submissions.append(submission)
+        invocation.status = ToolStatus.SUBMITTED
+        append_event(
+            session,
+            EventType.TOOL_SUBMITTED,
+            payload={
+                "tool_id": tool_id,
+                "submission_id": submission.id,
+                "artifact_keys": sorted(submission.content.keys()),
+            },
+        )
+
+        try:
+            evaluator = self.tool_registry.get(invocation.kind)
+            evaluation = await evaluator.evaluate(invocation, submission, session, job)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+        session.tool_evaluations.append(evaluation)
+        invocation.status = ToolStatus.EVALUATED
+        append_event(
+            session,
+            EventType.TOOL_EVALUATED,
+            payload={
+                "tool_id": tool_id,
+                "submission_id": submission.id,
+                "passed": evaluation.passed,
+                "score": evaluation.score,
+                "summary": evaluation.summary,
+            },
+        )
+        await self.store.put_session(session)
+        return evaluation
 
     async def correct_transcript(
         self,
@@ -309,6 +466,11 @@ class InterviewService:
             if turn.speaker is Speaker.INTERVIEWER
             and turn.metadata.get("question_lane") == QuestionLane.ANCHOR.value
         )
+        candidate_controls = [
+            event.payload
+            for event in session.events
+            if event.type is EventType.CANDIDATE_CONTROL
+        ]
         return VoxRubricTrace(
             session_id=session.id,
             role=job.title,
@@ -322,6 +484,7 @@ class InterviewService:
                 "anchor_ratio_target": job.anchor_ratio,
                 "anchor_turns": anchor_turns,
                 "interviewer_turns": session.asked_questions,
+                "candidate_controls": candidate_controls,
                 "evidence_graph": {
                     key: value.model_dump(mode="json")
                     for key, value in session.evidence_graph.items()
@@ -335,6 +498,15 @@ class InterviewService:
                 "integrity_signals": [
                     signal.model_dump(mode="json")
                     for signal in session.integrity_signals
+                ],
+                "tools": [tool.model_dump(mode="json") for tool in session.tools],
+                "tool_submissions": [
+                    submission.model_dump(mode="json")
+                    for submission in session.tool_submissions
+                ],
+                "tool_evaluations": [
+                    evaluation.model_dump(mode="json")
+                    for evaluation in session.tool_evaluations
                 ],
                 "event_count": len(session.events),
             },
