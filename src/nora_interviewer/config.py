@@ -14,6 +14,7 @@ from .providers.fallback import FallbackBrain
 from .providers.llm_brain import LLMInterviewBrain
 from .providers.rule_based import RuleBasedBrain
 from .providers.streaming_speech import DisabledStreamingSpeechProvider
+from .providers.websocket_speech import JsonWebSocketSpeechProvider
 from .postgres_store import PostgresStore
 from .sqlite_store import SqliteStore
 from .storage import InMemoryStore
@@ -268,10 +269,12 @@ def build_principal_resolver():
 def build_streaming_speech_provider():
     """Build the realtime streaming STT provider.
 
-    The transport protocol can be enabled independently from a concrete
-    transcription vendor. Until a provider adapter is configured, attempts to
-    open an audio stream fail explicitly instead of pretending browser speech
-    APIs are a production streaming backend.
+    disabled:
+        Explicitly disables production streaming transcription.
+
+    websocket-json:
+        Connects to any STT service implementing the versioned
+        nora.stt.v1 WebSocket protocol.
     """
 
     mode = os.getenv(
@@ -282,10 +285,70 @@ def build_streaming_speech_provider():
     if mode == "disabled":
         return DisabledStreamingSpeechProvider()
 
+    if mode == "websocket-json":
+        url = os.getenv(
+            "NORA_STREAMING_STT_URL",
+            "",
+        ).strip()
+        token = os.getenv(
+            "NORA_STREAMING_STT_TOKEN"
+        )
+        allow_insecure = os.getenv(
+            "NORA_STREAMING_STT_ALLOW_INSECURE",
+            "false",
+        ).strip().lower() in {"1", "true", "yes", "on"}
+
+        if not url:
+            raise RuntimeError(
+                "NORA_STREAMING_STT_URL is required in websocket-json mode"
+            )
+        if (
+            url.startswith("ws://")
+            and not allow_insecure
+        ):
+            raise RuntimeError(
+                "NORA_STREAMING_STT_URL must use wss:// unless "
+                "NORA_STREAMING_STT_ALLOW_INSECURE=true"
+            )
+        if not url.startswith(("wss://", "ws://")):
+            raise RuntimeError(
+                "NORA_STREAMING_STT_URL must start with wss:// or ws://"
+            )
+
+        try:
+            open_timeout_seconds = float(
+                os.getenv(
+                    "NORA_STREAMING_STT_OPEN_TIMEOUT_SECONDS",
+                    "10",
+                )
+            )
+            max_message_bytes = int(
+                os.getenv(
+                    "NORA_STREAMING_STT_MAX_MESSAGE_BYTES",
+                    "1048576",
+                )
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                "Streaming STT timeout must be numeric and max message size "
+                "must be an integer"
+            ) from exc
+
+        try:
+            return JsonWebSocketSpeechProvider(
+                url=url,
+                token=token,
+                open_timeout_seconds=open_timeout_seconds,
+                max_message_bytes=max_message_bytes,
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Invalid websocket-json STT configuration: {exc}"
+            ) from exc
+
     raise RuntimeError(
         f"Unsupported NORA_STREAMING_STT_MODE: {mode}"
     )
-
 
 def build_store():
     """Build the configured Nora persistence backend.
