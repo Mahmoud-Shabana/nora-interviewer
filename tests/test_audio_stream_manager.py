@@ -155,7 +155,7 @@ def test_generation_rotation_invalidates_stale_audio():
     assert audio == b"fresh"
 
 
-def test_reconnect_requires_token_session_generation_and_exact_sequence():
+def test_reconnect_requires_identity_and_never_accepts_cursor_ahead_of_server():
     manager, result = opened()
     stream_id = result.state.stream_id
 
@@ -192,14 +192,28 @@ def test_reconnect_requires_token_session_generation_and_exact_sequence():
             session_id="session",
             reconnect_token=result.reconnect_token,
             generation=3,
-            next_sequence=0,
+            next_sequence=2,
         )
 
-    state = manager.reconnect(
+    # The client may reconnect from its last acknowledged cursor. The
+    # authoritative server cursor is returned so unacknowledged frames can
+    # be reconciled without replaying frames the server already accepted.
+    behind = manager.reconnect(
+        stream_id=stream_id,
+        session_id="session",
+        reconnect_token=result.reconnect_token,
+        generation=3,
+        next_sequence=0,
+    )
+    assert behind.next_sequence == 1
+    assert behind.reconnect_count == 1
+
+    exact = manager.reconnect(
         stream_id=stream_id,
         session_id="session",
         reconnect_token=result.reconnect_token,
         generation=3,
         next_sequence=1,
     )
-    assert state.reconnect_count == 1
+    assert exact.next_sequence == 1
+    assert exact.reconnect_count == 2
