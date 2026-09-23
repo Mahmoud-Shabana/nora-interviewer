@@ -4,10 +4,14 @@ A production-oriented nucleus for **real-time, adaptive AI interviews**. Nora ha
 
 The repository intentionally separates **conversation orchestration** from **speech providers**, **LLM providers**, and **candidate evaluation** so the system can evolve without turning into a provider-specific demo.
 
-## Current v0.1
+## Current v0.2
 
 - FastAPI REST API
+- browser interview room at `/`
 - real-time WebSocket interview protocol
+- optional browser speech recognition + speech synthesis demo
+- structured LLM brain with an OpenAI-compatible provider adapter
+- deterministic fallback if the model/provider fails
 - explicit interview state machine
 - adaptive follow-up linkage through `parent_turn_id`
 - competency coverage tracking
@@ -23,6 +27,8 @@ The repository intentionally separates **conversation orchestration** from **spe
 python -m pip install -e '.[dev]'
 pytest
 uvicorn nora_interviewer.api:app --reload
+
+# then open http://localhost:8000
 ```
 
 Then create a job, create a consented session, and connect to:
@@ -51,6 +57,34 @@ Server event:
 }
 ```
 
+## LLM mode
+
+The default is deterministic `rule` mode so a fresh clone runs with no credentials.
+
+To use an OpenAI-compatible chat-completions server:
+
+```bash
+export NORA_BRAIN_MODE=openai-compatible
+export NORA_LLM_BASE_URL=https://your-provider.example/v1
+export NORA_LLM_MODEL=your-model
+export NORA_LLM_API_KEY=...
+uvicorn nora_interviewer.api:app --reload
+```
+
+The LLM returns only a structured action, candidate-facing text, known competency IDs, and a reason. Nora—not the model—owns session state and follow-up parent IDs. Unknown competency IDs are rejected. Candidate answers are explicitly treated as untrusted data in the system prompt.
+
+## Browser voice demo
+
+When supported by the browser, the interview room can use browser-native speech recognition to fill the candidate answer box and speech synthesis to read Nora's questions aloud. This is deliberately a demo transport layer; production voice should use streaming STT/TTS providers with measured end-to-end latency, cancellation, barge-in, and reconnect handling.
+
+## Container run
+
+```bash
+docker compose up --build
+```
+
+Then open `http://localhost:8000`.
+
 ## Why the rule-based brain exists
 
 It is a **test double**, not the product intelligence. It makes session behavior reproducible in CI while the production `InterviewBrain` can be backed by any capable model. The public contract stays the same either way.
@@ -75,7 +109,7 @@ microphone -> audio chunks -> VAD/STT -> partial transcript
                                browser
 ```
 
-The `SpeechToTextProvider` and `TextToSpeechProvider` protocols are already isolated for this purpose. A production implementation should also support barge-in, cancellation, backpressure, reconnects, and measured end-to-end latency.
+The `SpeechToTextProvider` and `TextToSpeechProvider` protocols are already isolated for this purpose. The browser demo provides immediate voice interaction without a backend speech key; production implementations should still support barge-in, cancellation, backpressure, reconnects, and measured end-to-end latency.
 
 ## Evaluation path
 
