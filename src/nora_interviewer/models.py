@@ -51,15 +51,43 @@ class IntegrityLevel(str, Enum):
     PROCTORED = "proctored"
 
 
+class CandidateControlKind(str, Enum):
+    REPEAT = "repeat"
+    CLARIFY = "clarify"
+    THINKING_TIME = "thinking_time"
+    RESUME = "resume"
+    CORRECT_LAST_ANSWER = "correct_last_answer"
+    CANDIDATE_QUESTION = "candidate_question"
+
+
+class ToolKind(str, Enum):
+    CODING = "coding"
+    CASE_STUDY = "case_study"
+    WHITEBOARD = "whiteboard"
+    DOCUMENT = "document"
+    DATASET = "dataset"
+
+
+class ToolStatus(str, Enum):
+    OPEN = "open"
+    SUBMITTED = "submitted"
+    EVALUATED = "evaluated"
+    CANCELLED = "cancelled"
+
+
 class EventType(str, Enum):
     SESSION_CREATED = "session_created"
     INTERVIEW_STARTED = "interview_started"
     INTERVIEWER_TURN = "interviewer_turn"
     CANDIDATE_TURN = "candidate_turn"
+    CANDIDATE_CONTROL = "candidate_control"
     TRANSCRIPT_CORRECTED = "transcript_corrected"
     APPEAL_SUBMITTED = "appeal_submitted"
     EVIDENCE_OBSERVED = "evidence_observed"
     INTEGRITY_SIGNAL = "integrity_signal"
+    TOOL_OPENED = "tool_opened"
+    TOOL_SUBMITTED = "tool_submitted"
+    TOOL_EVALUATED = "tool_evaluated"
     SESSION_COMPLETED = "session_completed"
 
 
@@ -103,6 +131,19 @@ class Turn(StrictModel):
     competency_tags: list[str] = Field(default_factory=list)
     response_latency_ms: int | None = Field(default=None, ge=0)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CandidateControlRequest(StrictModel):
+    kind: CandidateControlKind
+    text: str | None = Field(default=None, max_length=5000)
+
+
+class CandidateControlResult(StrictModel):
+    kind: CandidateControlKind
+    acknowledged: bool = True
+    interviewer_turn: Turn | None = None
+    target_turn_id: str | None = None
+    pauses_interview: bool = False
 
 
 class EvidenceItem(StrictModel):
@@ -163,6 +204,36 @@ class IntegritySignalRequest(StrictModel):
     evidence: dict[str, Any] = Field(default_factory=dict)
 
 
+class ToolInvocation(StrictModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    kind: ToolKind
+    title: str = Field(min_length=2, max_length=200)
+    instructions: str = Field(min_length=2, max_length=20_000)
+    competency_tags: list[str] = Field(default_factory=list)
+    status: ToolStatus = ToolStatus.OPEN
+    payload: dict[str, Any] = Field(default_factory=dict)
+    opened_from_turn_id: str | None = None
+
+
+class ToolSubmissionRequest(StrictModel):
+    content: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolSubmission(StrictModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    tool_id: str
+    content: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolEvaluation(StrictModel):
+    tool_id: str
+    submission_id: str
+    passed: bool | None = None
+    score: float | None = Field(default=None, ge=0.0, le=1.0)
+    summary: str = Field(min_length=1)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
+
 class InterviewEvent(StrictModel):
     seq: int = Field(ge=1)
     type: EventType
@@ -177,6 +248,7 @@ class InterviewSession(StrictModel):
     locale: str
     integrity_level: IntegrityLevel = IntegrityLevel.NONE
     status: SessionStatus = SessionStatus.CREATED
+    paused: bool = False
     turns: list[Turn] = Field(default_factory=list)
     covered_competencies: list[str] = Field(default_factory=list)
     followups_by_competency: dict[str, int] = Field(default_factory=dict)
@@ -186,6 +258,9 @@ class InterviewSession(StrictModel):
     transcript_revisions: list[TranscriptRevision] = Field(default_factory=list)
     appeals: list[CandidateAppeal] = Field(default_factory=list)
     integrity_signals: list[IntegritySignal] = Field(default_factory=list)
+    tools: list[ToolInvocation] = Field(default_factory=list)
+    tool_submissions: list[ToolSubmission] = Field(default_factory=list)
+    tool_evaluations: list[ToolEvaluation] = Field(default_factory=list)
     events: list[InterviewEvent] = Field(default_factory=list)
 
 
