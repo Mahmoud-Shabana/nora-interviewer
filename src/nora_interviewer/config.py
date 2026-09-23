@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import os
 
-from .authn import DisabledPrincipalResolver, DevHeaderPrincipalResolver
+from .authn import (
+    DisabledPrincipalResolver,
+    DevHeaderPrincipalResolver,
+    JwtJwksPrincipalResolver,
+)
 from .evidence_ensemble import EvidenceJudgeEnsemble
 from .evidence_judge import DisabledEvidenceJudge, LLMEvidenceJudge
 from .providers.completion import OpenAICompatibleChatProvider
@@ -167,6 +171,92 @@ def build_principal_resolver():
 
     if mode == "dev-header":
         return DevHeaderPrincipalResolver()
+
+    if mode == "jwt-jwks":
+        jwks_url = os.getenv(
+            "NORA_AUTH_JWKS_URL",
+            "",
+        ).strip()
+        issuer = os.getenv(
+            "NORA_AUTH_ISSUER",
+            "",
+        ).strip()
+        audience = os.getenv(
+            "NORA_AUTH_AUDIENCE",
+            "",
+        ).strip()
+        algorithms = tuple(
+            item.strip()
+            for item in os.getenv(
+                "NORA_AUTH_ALGORITHMS",
+                "RS256",
+            ).split(",")
+            if item.strip()
+        )
+        allow_insecure_jwks = os.getenv(
+            "NORA_AUTH_ALLOW_INSECURE_JWKS",
+            "false",
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        allow_service_role = os.getenv(
+            "NORA_AUTH_ALLOW_SERVICE_ROLE",
+            "false",
+        ).strip().lower() in {"1", "true", "yes", "on"}
+
+        if not jwks_url or not issuer or not audience:
+            raise RuntimeError(
+                "NORA_AUTH_JWKS_URL, NORA_AUTH_ISSUER, and "
+                "NORA_AUTH_AUDIENCE are required in jwt-jwks mode"
+            )
+        if (
+            not jwks_url.startswith("https://")
+            and not allow_insecure_jwks
+        ):
+            raise RuntimeError(
+                "NORA_AUTH_JWKS_URL must use https:// unless "
+                "NORA_AUTH_ALLOW_INSECURE_JWKS=true"
+            )
+
+        try:
+            leeway_seconds = float(
+                os.getenv(
+                    "NORA_AUTH_LEEWAY_SECONDS",
+                    "30",
+                )
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                "NORA_AUTH_LEEWAY_SECONDS must be numeric"
+            ) from exc
+        if leeway_seconds < 0 or leeway_seconds > 300:
+            raise RuntimeError(
+                "NORA_AUTH_LEEWAY_SECONDS must be between 0 and 300"
+            )
+
+        try:
+            return JwtJwksPrincipalResolver(
+                jwks_url=jwks_url,
+                issuer=issuer,
+                audience=audience,
+                algorithms=algorithms,
+                principal_claim=os.getenv(
+                    "NORA_AUTH_PRINCIPAL_CLAIM",
+                    "sub",
+                ).strip() or "sub",
+                role_claim=os.getenv(
+                    "NORA_AUTH_ROLE_CLAIM",
+                    "nora_role",
+                ).strip() or "nora_role",
+                candidate_ref_claim=os.getenv(
+                    "NORA_AUTH_CANDIDATE_REF_CLAIM",
+                    "candidate_ref",
+                ).strip() or "candidate_ref",
+                leeway_seconds=leeway_seconds,
+                allow_service_role=allow_service_role,
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Invalid jwt-jwks configuration: {exc}"
+            ) from exc
 
     raise RuntimeError(
         f"Unsupported NORA_AUTH_MODE: {mode}"
