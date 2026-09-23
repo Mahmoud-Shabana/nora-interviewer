@@ -94,3 +94,9 @@ textarea{resize:vertical}
   .shell{padding:12px}.topbar{margin-bottom:14px}.brand span{display:none}.hero h1{font-size:40px}
   .sidebar{grid-template-columns:1fr}.conversation{min-height:72vh}.messages{padding:18px}
 }
+
+.voice-card{padding:18px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.02)}
+.voice-card strong{font-size:13px}.voice-card p{color:var(--muted);font-size:11px;line-height:1.55;margin:6px 0 12px}
+.mic{width:48px;height:48px;flex:none;border:1px solid var(--line);border-radius:12px;background:#1a202b;color:var(--soft);font-size:15px;transition:.2s}
+.mic:hover{border-color:#3b4658}.mic.listening{background:var(--danger);border-color:var(--danger);color:#160707;box-shadow:0 0 0 5px rgba(255,140,140,.08)}
+.secondary.active{background:var(--accent);color:#07110e;border-color:var(--accent);font-weight:800}
