@@ -186,6 +186,51 @@ class SqliteStore:
             payload
         )
 
+    async def list_sessions(
+        self,
+    ) -> list[InterviewSession]:
+        payloads = await asyncio.to_thread(
+            self._list_session_payloads_sync,
+        )
+        return [
+            InterviewSession.model_validate_json(payload)
+            for payload in payloads
+        ]
+
+    def _list_session_payloads_sync(
+        self,
+    ) -> list[str]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT payload
+                FROM sessions
+                ORDER BY updated_at ASC, id ASC
+                """
+            ).fetchall()
+        return [str(row[0]) for row in rows]
+
+    async def delete_session(
+        self,
+        session_id: str,
+    ) -> bool:
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._delete_session_sync,
+                session_id,
+            )
+
+    def _delete_session_sync(
+        self,
+        session_id: str,
+    ) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM sessions WHERE id = ?",
+                (session_id,),
+            )
+        return cursor.rowcount > 0
+
     def _get_payload_sync(
         self,
         table: str,
