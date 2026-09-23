@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nora-interviewer"
+version = "0.1.0"
+description = "Provider-neutral real-time AI interview orchestration service."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+authors = [{name = "Mahmoud S. Hossam Eldin"}]
+dependencies = [
+  "fastapi>=0.115",
+  "pydantic>=2.8,<3",
+  "uvicorn[standard]>=0.30",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+nora-interviewer = "nora_interviewer.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nora_interviewer"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["src"]
