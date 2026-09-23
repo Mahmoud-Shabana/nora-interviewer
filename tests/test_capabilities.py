@@ -56,6 +56,9 @@ def test_capability_description_contains_backends_not_secrets(monkeypatch):
         capabilities.rubric_drafter_backend
         == "DisabledRubricDrafter"
     )
+    assert capabilities.rubric_draft_persistence is True
+    assert capabilities.rubric_human_approval is True
+    assert capabilities.job_rubric_provenance is True
 
     serialized = capabilities.model_dump_json()
     assert "API_KEY" not in serialized
