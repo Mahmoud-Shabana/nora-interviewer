@@ -236,6 +236,7 @@ async def system_capabilities(
         store=store,
         principal_resolver=principal_resolver,
         service=service,
+        streaming_speech_provider=streaming_speech_provider,
     )
 
 
