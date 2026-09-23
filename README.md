@@ -75,6 +75,7 @@ It separates:
 | Role/permission authorization boundary | ✅ Implemented |
 | Production OIDC/JWT authentication | 🧭 Planned |
 | PostgreSQL multi-instance persistence | 🧭 Planned |
+| Dry-run-first session retention | ✅ Implemented |
 
 ---
 
@@ -658,6 +659,26 @@ See [Authorization Model](docs/AUTHORIZATION.md).
 
 ---
 
+# 🧹 Data retention
+
+Nora includes a backend-neutral retention manager.
+
+Default behavior is deliberately conservative:
+
+```json
+{
+  "max_age_days": 90,
+  "completed_only": true,
+  "dry_run": true
+}
+```
+
+Only the internal service role can execute the retention endpoint.
+
+See [Data Retention](docs/RETENTION.md).
+
+---
+
 # 🚀 Quick start
 
 ## Requirements
@@ -877,6 +898,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Independent Evidence Judge](docs/EVIDENCE_JUDGE.md)
 - [Authorization Model](docs/AUTHORIZATION.md)
 - [Storage Backends](docs/STORAGE.md)
+- [Data Retention](docs/RETENTION.md)
 - [VoxRubric](https://github.com/Mahmoud-Shabana/voxrubric)
 
 ---
@@ -916,6 +938,9 @@ Nora is intentionally conservative around high-stakes behavior.
 - [x] REST + WebSocket authorization boundary
 - [x] Durable local SQLite store
 - [x] Configurable memory/SQLite persistence
+- [x] Session creation/completion timestamps
+- [x] Backend-neutral retention manager
+- [x] Service-only dry-run-first retention API
 
 ## 🚧 In progress
 
