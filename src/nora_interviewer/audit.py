@@ -6,6 +6,7 @@ import json
 from pydantic_core import to_jsonable_python
 
 from .models import EventType, InterviewEvent, InterviewSession, Turn
+from .trace_context import current_correlation_id
 
 
 HASH_VERSION = 1
@@ -153,11 +154,26 @@ def append_event(
         session.events
     )
 
+    event_payload = dict(payload or {})
+    correlation_id = current_correlation_id()
+    if correlation_id:
+        trace = event_payload.get("_trace")
+        trace = (
+            dict(trace)
+            if isinstance(trace, dict)
+            else {}
+        )
+        trace.setdefault(
+            "correlation_id",
+            correlation_id,
+        )
+        event_payload["_trace"] = trace
+
     event = InterviewEvent(
         seq=len(session.events) + 1,
         type=event_type,
         turn_id=turn.id if turn else None,
-        payload=payload or {},
+        payload=event_payload,
         hash_version=HASH_VERSION,
         prev_hash=prev_hash,
     )
