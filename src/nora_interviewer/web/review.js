@@ -62,7 +62,7 @@ async function reviewIntegrity(sessionId, signalId) {
         body: JSON.stringify({note: note.trim()}),
       },
     );
-    await loadQueue();
+    await Promise.all([loadQueue(), loadSummary()]);
     const active = document.querySelector(`[data-session-id="${sessionId}"]`);
     await loadReport(sessionId, active);
   } catch (error) {
@@ -229,6 +229,20 @@ function renderReport(report) {
   }
 }
 
+async function loadSummary() {
+  try {
+    const summary = await jsonFetch("/v1/review/summary");
+    $("sumTotal").textContent = summary.total_sessions;
+    $("sumReview").textContent = summary.review_required;
+    $("sumAppeals").textContent = summary.pending_appeals;
+    $("sumIntegrity").textContent = summary.pending_integrity_signals;
+    $("sumTools").textContent = summary.unresolved_tools;
+    $("sumCompleted").textContent = summary.completed_sessions;
+  } catch (error) {
+    console.warn("Review summary unavailable", error);
+  }
+}
+
 async function loadQueue() {
   $("queue").innerHTML = '<div class="queue-empty">Loading…</div>';
   try {
@@ -254,7 +268,9 @@ async function loadReport(sessionId, button) {
   }
 }
 
-$("refreshQueue").addEventListener("click", loadQueue);
+$("refreshQueue").addEventListener("click", async () => {
+  await Promise.all([loadQueue(), loadSummary()]);
+});
 $("showAll").addEventListener("change", loadQueue);
 loadQueue();
 
