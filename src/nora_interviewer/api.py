@@ -223,6 +223,10 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
             await websocket.send_json(
                 {"type": "interviewer_turn", "data": step.interviewer_turn.model_dump(mode="json")}
             )
+        if step.tool_invocation:
+            await websocket.send_json(
+                {"type": "tool_opened", "data": step.tool_invocation.model_dump(mode="json")}
+            )
 
         while step.status.value != "completed":
             event = await websocket.receive_json()
@@ -263,6 +267,10 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
             if step.interviewer_turn:
                 await websocket.send_json(
                     {"type": "interviewer_turn", "data": step.interviewer_turn.model_dump(mode="json")}
+                )
+            if step.tool_invocation:
+                await websocket.send_json(
+                    {"type": "tool_opened", "data": step.tool_invocation.model_dump(mode="json")}
                 )
             if step.status.value == "completed":
                 await websocket.send_json(
