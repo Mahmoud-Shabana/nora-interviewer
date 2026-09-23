@@ -12,6 +12,8 @@ from .models import (
     CompetencyEvidence,
     CreateSession,
     EvidenceObservation,
+    IntegritySignal,
+    IntegritySignalRequest,
     InterviewEvent,
     InterviewSession,
     JobSpec,
@@ -73,8 +75,6 @@ async def get_session(session_id: str) -> InterviewSession:
     return session
 
 
-
-
 @app.post(
     "/v1/sessions/{session_id}/corrections",
     response_model=TranscriptRevision,
@@ -97,6 +97,18 @@ async def submit_appeal(
     request: CandidateAppealRequest,
 ) -> CandidateAppeal:
     return await service.submit_appeal(session_id, request)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/integrity-signals",
+    response_model=IntegritySignal,
+    status_code=201,
+)
+async def submit_integrity_signal(
+    session_id: str,
+    request: IntegritySignalRequest,
+) -> IntegritySignal:
+    return await service.submit_integrity_signal(session_id, request)
 
 
 @app.post(
