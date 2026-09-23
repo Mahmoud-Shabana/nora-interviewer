@@ -132,6 +132,7 @@ function openToolWorkspace(tool) {
   $("toolTitle").textContent = tool.title || "Practical task";
   $("toolInstructions").textContent = tool.instructions || "";
   $("toolStatus").textContent = "Not submitted";
+  $("submitToolBtn").disabled = false;
   $("toolResult").classList.add("hidden");
   $("toolResult").textContent = "";
 
@@ -167,13 +168,14 @@ async function submitCurrentTool() {
   $("submitToolBtn").disabled = true;
   $("toolStatus").textContent = "Evaluating…";
   try {
-    const evaluation = await jsonFetch(
+    const step = await jsonFetch(
       `/v1/sessions/${state.session.id}/tools/${tool.id}/submit`,
       {
         method: "POST",
         body: JSON.stringify({content}),
       },
     );
+    const evaluation = step.evaluation;
     const result = $("toolResult");
     result.classList.remove("hidden");
     const score = evaluation.score == null
@@ -185,6 +187,28 @@ async function submitCurrentTool() {
       : evaluation.passed === false
         ? "Needs review"
         : "Submitted for review";
+
+    if (step.interviewer_turn) {
+      const turn = step.interviewer_turn;
+      const lane = turn.metadata?.question_lane
+        ? turn.metadata.question_lane.toUpperCase()
+        : "NORA";
+      const tags = turn.competency_tags?.join(" · ");
+      addMessage("nora", turn.text, [lane, tags].filter(Boolean).join(" · "));
+      speak(turn.text);
+      updateProgress(turn);
+    }
+
+    if (step.next_tool_invocation) {
+      openToolWorkspace(step.next_tool_invocation);
+    }
+
+    if (step.status === "completed") {
+      setConnection("Interview complete");
+      $("answerBox").disabled = true;
+      document.querySelector(".send").disabled = true;
+      $("micBtn").disabled = true;
+    }
   } catch (error) {
     $("toolStatus").textContent = "Submission failed";
     setConnection(error.message, true);
