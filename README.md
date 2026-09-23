@@ -1,65 +1,100 @@
 # Nora Interviewer
 
-A production-oriented nucleus for **real-time, adaptive AI interviews**. Nora handles interview state, competency coverage, traceable follow-ups, WebSocket interaction, consent gates, and export into the open VoxRubric evaluation format.
+> An open interview operating system for auditable, adaptive, multilingual AI interviews.
 
-The repository intentionally separates **conversation orchestration** from **speech providers**, **LLM providers**, and **candidate evaluation** so the system can evolve without turning into a provider-specific demo.
+Nora is not designed as a black-box candidate scorer. It is a research-grade interview orchestration platform that keeps **conversation, evidence, candidate rights, integrity signals, and evaluation** as separate, inspectable layers.
 
-## Current v0.2
+The project pairs naturally with [VoxRubric](https://github.com/Mahmoud-Shabana/voxrubric), which evaluates Nora traces and other interview agents.
 
-- FastAPI REST API
-- browser interview room at `/`
-- real-time WebSocket interview protocol
-- optional browser speech recognition + speech synthesis demo
-- structured LLM brain with an OpenAI-compatible provider adapter
-- deterministic fallback if the model/provider fails
-- explicit interview state machine
-- adaptive follow-up linkage through `parent_turn_id`
-- competency coverage tracking
-- mandatory AI/transcript consent gate
-- provider protocols for LLM brain, STT, and TTS
-- deterministic development brain for reproducible tests
-- VoxRubric-compatible trace export
-- test suite and CI-ready package
+## Current v0.3
 
-## Run
+### Interview intelligence
+
+- **Dual-lane protocol:** standardized anchor questions + adaptive investigation.
+- traceable follow-ups through `parent_turn_id`.
+- structured LLM brain with an OpenAI-compatible provider adapter.
+- deterministic fallback if the model/provider fails.
+- explicit competency and question-budget state.
+- browser interview room with live WebSocket conversation.
+- optional browser speech recognition + speech synthesis demo.
+
+### Evidence
+
+Nora maintains a provenance-first **Skill Evidence Graph**.
+
+A candidate answer initially proves only that a claim was made. Stronger states must be explicitly observed:
+
+```text
+unknown -> claimed -> demonstrated -> verified
+                  \-> insufficient_evidence
+                  \-> contradicted
+```
+
+Evidence observations reference real transcript turns and keep evaluator confidence separate from candidate claims.
+
+### Candidate rights
+
+- explicit consent to AI interviewing.
+- separate consent to transcript processing.
+- candidate transcript correction while preserving original text.
+- candidate appeals linked to exact conversation turns.
+- append-only audit events and replay.
+- no hidden sensitive-trait scoring schema.
+
+See `docs/CANDIDATE_RIGHTS.md`.
+
+### Progressive integrity
+
+Integrity is opt-in per session:
+
+```text
+none
+identity
+passive_signals
+secure
+proctored
+```
+
+Integrity detectors produce **review signals**, not automatic misconduct decisions. Every signal is explicitly marked `requires_human_review=true`.
+
+### Evaluation export
+
+Nora exports a VoxRubric-compatible trace containing:
+
+- question lanes;
+- response latency;
+- competency tags;
+- evidence graph;
+- transcript revisions;
+- appeals;
+- integrity signals;
+- audit metadata.
+
+VoxRubric can then validate not only interview quality, but governance invariants such as evidence provenance and human-review-only integrity signals.
+
+## Run locally
 
 ```bash
 python -m pip install -e '.[dev]'
 pytest
 uvicorn nora_interviewer.api:app --reload
-
-# then open http://localhost:8000
 ```
 
-Then create a job, create a consented session, and connect to:
+Open:
 
 ```text
-ws://localhost:8000/v1/ws/interviews/{session_id}
+http://localhost:8000
 ```
 
-Client event:
+Or use Docker:
 
-```json
-{"type": "candidate_text", "text": "I redesigned the queue consumer and reduced p95 latency..."}
-```
-
-Server event:
-
-```json
-{
-  "type": "interviewer_turn",
-  "data": {
-    "speaker": "interviewer",
-    "text": "Could you make that more concrete...",
-    "parent_turn_id": "candidate-turn-id",
-    "competency_tags": ["distributed_systems"]
-  }
-}
+```bash
+docker compose up --build
 ```
 
 ## LLM mode
 
-The default is deterministic `rule` mode so a fresh clone runs with no credentials.
+The default is deterministic `rule` mode so a fresh clone runs without credentials.
 
 To use an OpenAI-compatible chat-completions server:
 
@@ -71,52 +106,75 @@ export NORA_LLM_API_KEY=...
 uvicorn nora_interviewer.api:app --reload
 ```
 
-The LLM returns only a structured action, candidate-facing text, known competency IDs, and a reason. Nora—not the model—owns session state and follow-up parent IDs. Unknown competency IDs are rejected. Candidate answers are explicitly treated as untrusted data in the system prompt.
+The LLM proposes a structured next action and candidate-facing text. Nora—not the model—owns session state, valid competency IDs, turn lineage, evidence state, appeals, integrity signals, and audit history.
+
+## Core API
+
+```text
+POST /v1/jobs
+POST /v1/sessions
+POST /v1/sessions/{id}/start
+POST /v1/sessions/{id}/responses
+
+POST /v1/sessions/{id}/corrections
+POST /v1/sessions/{id}/appeals
+POST /v1/sessions/{id}/evidence
+POST /v1/sessions/{id}/integrity-signals
+
+GET  /v1/sessions/{id}
+GET  /v1/sessions/{id}/events
+GET  /v1/sessions/{id}/replay
+GET  /v1/sessions/{id}/voxrubric
+
+WS   /v1/ws/interviews/{id}
+```
+
+## Architecture
+
+```text
+Candidate UI / Voice / Coding / future tools
+                  |
+                  v
+          Interview transport
+                  |
+                  v
+         Session orchestrator
+           /             \
+ DualLanePlanner      InterviewBrain
+       |                   |
+       +---------+---------+
+                 |
+                 v
+          Skill Evidence Graph
+                 |
+      +----------+-----------+
+      |                      |
+ Audit / Candidate Rights   Integrity Signals
+      |                      |
+      +----------+-----------+
+                 |
+                 v
+          VoxRubric export
+```
+
+See:
+
+- `docs/ARCHITECTURE.md`
+- `docs/INTERVIEW_PROTOCOL.md`
+- `docs/CANDIDATE_RIGHTS.md`
 
 ## Browser voice demo
 
-When supported by the browser, the interview room can use browser-native speech recognition to fill the candidate answer box and speech synthesis to read Nora's questions aloud. This is deliberately a demo transport layer; production voice should use streaming STT/TTS providers with measured end-to-end latency, cancellation, barge-in, and reconnect handling.
+When supported by the browser, Nora can use browser-native speech recognition to fill the answer box and speech synthesis to read interviewer questions aloud.
 
-## Container run
-
-```bash
-docker compose up --build
-```
-
-Then open `http://localhost:8000`.
-
-## Why the rule-based brain exists
-
-It is a **test double**, not the product intelligence. It makes session behavior reproducible in CI while the production `InterviewBrain` can be backed by any capable model. The public contract stays the same either way.
-
-## Real voice path
-
-The WebSocket transport is designed to grow into this event flow:
-
-```text
-microphone -> audio chunks -> VAD/STT -> partial transcript
-                                  |
-                                  v
-                           InterviewBrain
-                                  |
-                                  v
-                            response text
-                                  |
-                                  v
-                              TTS stream
-                                  |
-                                  v
-                               browser
-```
-
-The `SpeechToTextProvider` and `TextToSpeechProvider` protocols are already isolated for this purpose. The browser demo provides immediate voice interaction without a backend speech key; production implementations should still support barge-in, cancellation, backpressure, reconnects, and measured end-to-end latency.
-
-## Evaluation path
-
-Nora does **not** silently decide who gets hired. Session traces export to VoxRubric so scoring behavior can be tested separately for grounding, coverage, consistency, latency, multilingual robustness, and other metrics.
+This is a zero-key demo layer, not the final production speech stack. Production voice should add streaming STT/TTS, VAD, cancellation, barge-in, reconnects, backpressure, and measured end-to-end latency.
 
 ## Safety baseline
 
-Do not score protected or sensitive traits, facial appearance, attractiveness, accent prestige, or inferred emotion. Keep job-related rubrics explicit, candidate data access-controlled, and hiring decisions under accountable human review.
+Nora should not score facial appearance, attractiveness, accent prestige, inferred emotion, race, religion, nationality, disability, age, gender, health, or similar protected/sensitive traits.
 
-See `docs/ARCHITECTURE.md` for system boundaries.
+Job-relevant decisions should stay tied to explicit rubrics, reviewable evidence, applicable law, and accountable human review.
+
+## License
+
+Apache-2.0.
