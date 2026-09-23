@@ -530,13 +530,15 @@ async def review_integrity_signal(
 async def observe_evidence(
     session_id: str,
     observation: EvidenceObservation,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     principal: Principal = Depends(current_principal),
 ) -> CompetencyEvidence:
-    await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.WRITE_EVIDENCE,
     )
+    enforce_session_precondition(session, if_match)
     return await service.observe_evidence(session_id, observation)
 
 
