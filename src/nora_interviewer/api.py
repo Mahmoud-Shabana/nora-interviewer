@@ -23,6 +23,7 @@ from .models import (
     CandidateControlRequest,
     CandidateControlResult,
     CandidateResponse,
+    CancelSessionRequest,
     CompetencyEvidence,
     CreateSession,
     EvidenceObservation,
@@ -280,6 +281,37 @@ async def create_session(
         Permission.CREATE_SESSION,
     )
     return await service.create_session(request)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/cancel",
+    response_model=InterviewSession,
+)
+async def cancel_session(
+    session_id: str,
+    request: CancelSessionRequest,
+    if_match: str | None = Header(default=None, alias="If-Match"),
+    principal: Principal = Depends(current_principal),
+) -> InterviewSession:
+    session = await require_session_permission(
+        session_id,
+        principal,
+        Permission.CANCEL_SESSION,
+    )
+    enforce_session_precondition(session, if_match)
+
+    await service.cancel_session(
+        session_id,
+        request,
+    )
+    await voice.close_session(
+        session_id,
+        reason="session_cancelled",
+    )
+    current = await store.get_session(session_id)
+    if current is None:
+        raise HTTPException(404, "Session not found")
+    return current
 
 
 @app.post("/v1/sessions/{session_id}/start", response_model=SessionStep)
