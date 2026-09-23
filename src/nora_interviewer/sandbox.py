@@ -75,8 +75,16 @@ class DockerSandboxRunner:
     ) -> SandboxResult:
         with tempfile.TemporaryDirectory(prefix="nora-sandbox-") as tmp:
             root = Path(tmp)
-            (root / "solution.py").write_text(source, encoding="utf-8")
-            (root / "harness.py").write_text(harness, encoding="utf-8")
+            solution_path = root / "solution.py"
+            harness_path = root / "harness.py"
+            solution_path.write_text(source, encoding="utf-8")
+            harness_path.write_text(harness, encoding="utf-8")
+
+            # The container deliberately runs as an unprivileged uid. Make only
+            # the temporary challenge directory readable/traversable by it.
+            root.chmod(0o755)
+            solution_path.chmod(0o444)
+            harness_path.chmod(0o444)
 
             command = [
                 "docker",
