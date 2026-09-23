@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -103,6 +103,32 @@ def require_global_permission(
         principal,
         permission,
     )
+
+
+def session_etag(session: InterviewSession) -> str:
+    return f'"nora-session-{session.id}-v{session.version}"'
+
+
+def enforce_session_precondition(
+    session: InterviewSession,
+    if_match: str | None,
+) -> None:
+    if if_match is None or if_match == "*":
+        return
+
+    current = session_etag(session)
+    if if_match.strip() != current:
+        raise HTTPException(
+            status_code=412,
+            detail={
+                "message": (
+                    "Session version precondition failed. "
+                    "Reload the session and retry with the current ETag."
+                ),
+                "current_etag": current,
+                "current_version": session.version,
+            },
+        )
 
 
 app = FastAPI(
@@ -259,13 +285,15 @@ async def create_session(
 @app.post("/v1/sessions/{session_id}/start", response_model=SessionStep)
 async def start_session(
     session_id: str,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     principal: Principal = Depends(current_principal),
 ) -> SessionStep:
-    await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.RUN_INTERVIEW,
     )
+    enforce_session_precondition(session, if_match)
     return await service.start(session_id)
 
 
@@ -273,13 +301,15 @@ async def start_session(
 async def submit_response(
     session_id: str,
     response: CandidateResponse,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     principal: Principal = Depends(current_principal),
 ) -> SessionStep:
-    await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.RUN_INTERVIEW,
     )
+    enforce_session_precondition(session, if_match)
     return await service.answer(session_id, response.text)
 
 
@@ -290,13 +320,15 @@ async def submit_response(
 async def candidate_control(
     session_id: str,
     request: CandidateControlRequest,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     principal: Principal = Depends(current_principal),
 ) -> CandidateControlResult:
-    await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.CANDIDATE_CONTROL,
     )
+    enforce_session_precondition(session, if_match)
     return await service.candidate_control(session_id, request)
 
 
@@ -308,13 +340,15 @@ async def candidate_control(
 async def open_coding_challenge(
     session_id: str,
     request: CodingChallengeRequest,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     principal: Principal = Depends(current_principal),
 ) -> ToolInvocation:
-    await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.OPEN_TOOL,
     )
+    enforce_session_precondition(session, if_match)
     return await service.open_coding_challenge(session_id, request)
 
 
@@ -326,13 +360,15 @@ async def open_coding_challenge(
 async def open_tool(
     session_id: str,
     invocation: ToolInvocation,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     principal: Principal = Depends(current_principal),
 ) -> ToolInvocation:
-    await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.OPEN_TOOL,
     )
+    enforce_session_precondition(session, if_match)
     return await service.open_tool(session_id, invocation)
 
 
@@ -344,26 +380,33 @@ async def submit_tool(
     session_id: str,
     tool_id: str,
     request: ToolSubmissionRequest,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     principal: Principal = Depends(current_principal),
 ) -> ToolStep:
-    await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.SUBMIT_TOOL,
     )
+    enforce_session_precondition(session, if_match)
     return await service.submit_tool(session_id, tool_id, request)
 
 
 @app.get("/v1/sessions/{session_id}", response_model=InterviewSession)
 async def get_session(
     session_id: str,
+    response: Response,
     principal: Principal = Depends(current_principal),
 ) -> InterviewSession:
-    return await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.READ_SESSION,
     )
+    response.headers["ETag"] = session_etag(session)
+    response.headers["X-Nora-Session-Version"] = str(session.version)
+    response.headers["Cache-Control"] = "no-store"
+    return session
 
 
 @app.post(
@@ -374,13 +417,15 @@ async def get_session(
 async def correct_transcript(
     session_id: str,
     request: TranscriptCorrectionRequest,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     principal: Principal = Depends(current_principal),
 ) -> TranscriptRevision:
-    await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.CORRECT_TRANSCRIPT,
     )
+    enforce_session_precondition(session, if_match)
     return await service.correct_transcript(session_id, request)
 
 
@@ -392,13 +437,15 @@ async def correct_transcript(
 async def submit_appeal(
     session_id: str,
     request: CandidateAppealRequest,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     principal: Principal = Depends(current_principal),
 ) -> CandidateAppeal:
-    await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.SUBMIT_APPEAL,
     )
+    enforce_session_precondition(session, if_match)
     return await service.submit_appeal(session_id, request)
 
 
@@ -410,13 +457,15 @@ async def review_appeal(
     session_id: str,
     appeal_id: str,
     request: AppealReviewSubmission,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     principal: Principal = Depends(current_principal),
 ) -> CandidateAppeal:
-    await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.REVIEW_APPEAL,
     )
+    enforce_session_precondition(session, if_match)
     return await service.review_appeal(
         session_id,
         appeal_id,
@@ -435,13 +484,15 @@ async def review_appeal(
 async def submit_integrity_signal(
     session_id: str,
     request: IntegritySignalRequest,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     principal: Principal = Depends(current_principal),
 ) -> IntegritySignal:
-    await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.WRITE_INTEGRITY,
     )
+    enforce_session_precondition(session, if_match)
     return await service.submit_integrity_signal(session_id, request)
 
 
@@ -453,13 +504,15 @@ async def review_integrity_signal(
     session_id: str,
     signal_id: str,
     request: IntegrityReviewSubmission,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     principal: Principal = Depends(current_principal),
 ) -> IntegritySignal:
-    await require_session_permission(
+    session = await require_session_permission(
         session_id,
         principal,
         Permission.REVIEW_INTEGRITY,
     )
+    enforce_session_precondition(session, if_match)
     return await service.review_integrity_signal(
         session_id,
         signal_id,
