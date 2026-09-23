@@ -36,6 +36,7 @@ class SystemCapabilities(StrictModel):
     streaming_tts_backend: str = "DisabledStreamingTtsProvider"
     voice_provider_health: bool = True
     operational_metrics: bool = True
+    correlation_ids: bool = True
     rubric_drafter_enabled: bool = False
     rubric_drafter_backend: str = "DisabledRubricDrafter"
     rubric_draft_persistence: bool = True
