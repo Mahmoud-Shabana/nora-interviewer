@@ -62,3 +62,36 @@ def test_metrics_never_export_candidate_job_or_transcript_values():
             "private-skill",
         ):
             assert secret not in serialized
+
+
+
+def test_http_metrics_export_route_templates_not_concrete_session_ids():
+    secret_session_marker = "SESSION-ID-MUST-NOT-BECOME-A-LABEL"
+
+    with TestClient(api.app) as client:
+        response = client.get(
+            f"/v1/sessions/{secret_session_marker}"
+        )
+        assert response.status_code == 404
+
+        metrics = client.get(
+            "/v1/system/metrics"
+        )
+        assert metrics.status_code == 200
+        assert secret_session_marker not in metrics.text
+        assert (
+            'route="/v1/sessions/{session_id}"'
+            in metrics.text
+        )
+
+        snapshot = client.get(
+            "/v1/system/operations"
+        )
+        assert snapshot.status_code == 200
+        assert secret_session_marker not in snapshot.text
+        http = snapshot.json()["http"]
+        assert any(
+            item["route"]
+            == "/v1/sessions/{session_id}"
+            for item in http["series"]
+        )
