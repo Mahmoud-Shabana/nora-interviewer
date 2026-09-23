@@ -13,6 +13,7 @@ from .providers.completion import OpenAICompatibleChatProvider
 from .providers.fallback import FallbackBrain
 from .providers.llm_brain import LLMInterviewBrain
 from .providers.rule_based import RuleBasedBrain
+from .postgres_store import PostgresStore
 from .sqlite_store import SqliteStore
 from .storage import InMemoryStore
 
@@ -272,6 +273,9 @@ def build_store():
     sqlite:
         Durable local SQLite database for development and single-process
         deployments.
+
+    postgres:
+        Async PostgreSQL storage for multi-instance deployments.
     """
 
     mode = os.getenv(
@@ -292,6 +296,52 @@ def build_store():
                 "NORA_SQLITE_PATH cannot be empty in sqlite mode"
             )
         return SqliteStore(path)
+
+    if mode == "postgres":
+        dsn = os.getenv(
+            "NORA_POSTGRES_DSN",
+            "",
+        ).strip()
+        if not dsn:
+            raise RuntimeError(
+                "NORA_POSTGRES_DSN is required in postgres mode"
+            )
+
+        try:
+            min_size = int(
+                os.getenv(
+                    "NORA_POSTGRES_MIN_SIZE",
+                    "1",
+                )
+            )
+            max_size = int(
+                os.getenv(
+                    "NORA_POSTGRES_MAX_SIZE",
+                    "10",
+                )
+            )
+            timeout_seconds = float(
+                os.getenv(
+                    "NORA_POSTGRES_TIMEOUT_SECONDS",
+                    "30",
+                )
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                "PostgreSQL pool sizes must be integers and timeout must be numeric"
+            ) from exc
+
+        try:
+            return PostgresStore(
+                dsn,
+                min_size=min_size,
+                max_size=max_size,
+                timeout_seconds=timeout_seconds,
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Invalid postgres storage configuration: {exc}"
+            ) from exc
 
     raise RuntimeError(
         f"Unsupported NORA_STORE_MODE: {mode}"
