@@ -177,7 +177,7 @@ class WebSocketMetricsMiddleware:
         error = False
 
         async def wrapped_send(message):
-            nonlocal accepted, started_at, closed
+            nonlocal accepted, started_at, closed, error
 
             message_type = message.get("type")
             if (
@@ -190,6 +190,15 @@ class WebSocketMetricsMiddleware:
                 accepted = True
             elif message_type == "websocket.close":
                 closed = True
+                close_code = int(
+                    message.get("code", 1000)
+                    or 1000
+                )
+                if close_code not in {
+                    1000,
+                    1001,
+                }:
+                    error = True
 
             await send(message)
 
