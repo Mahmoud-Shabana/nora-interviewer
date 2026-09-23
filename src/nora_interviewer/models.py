@@ -99,6 +99,7 @@ class EventType(str, Enum):
     TOOL_OPENED = "tool_opened"
     TOOL_SUBMITTED = "tool_submitted"
     TOOL_EVALUATED = "tool_evaluated"
+    TOOL_CANCELLED = "tool_cancelled"
     VOICE_SPEECH_STARTED = "voice_speech_started"
     VOICE_TRANSCRIPT_PARTIAL = "voice_transcript_partial"
     VOICE_TRANSCRIPT_FINAL = "voice_transcript_final"
