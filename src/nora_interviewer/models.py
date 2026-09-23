@@ -91,6 +91,7 @@ class EventType(str, Enum):
     VOICE_SPEECH_STARTED = "voice_speech_started"
     VOICE_TRANSCRIPT_PARTIAL = "voice_transcript_partial"
     VOICE_TRANSCRIPT_FINAL = "voice_transcript_final"
+    VOICE_RESPONSE_READY = "voice_response_ready"
     VOICE_TTS_STARTED = "voice_tts_started"
     VOICE_TTS_COMPLETED = "voice_tts_completed"
     VOICE_TTS_CANCELLED = "voice_tts_cancelled"
