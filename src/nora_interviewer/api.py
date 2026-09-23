@@ -2137,6 +2137,29 @@ async def audio_socket(
                         mode="json"
                     ),
                 })
+                if (
+                    result.vad is not None
+                    and result.vad.auto_commit_recommended
+                ):
+                    await audio_bridge.commit(
+                        stream_id=active_stream_id,
+                    )
+                    reason = (
+                        "vad_max_duration"
+                        if result.vad.state.value
+                        == "max_duration"
+                        else "vad_silence"
+                    )
+                    await send_json({
+                        "type": "stream_committed",
+                        "data": {
+                            "stream_id": active_stream_id,
+                            "reason": reason,
+                            "vad": result.vad.model_dump(
+                                mode="json"
+                            ),
+                        },
+                    })
                 continue
 
             if message_type == "commit":
