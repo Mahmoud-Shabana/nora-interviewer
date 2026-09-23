@@ -209,6 +209,23 @@ class RealtimeVoiceCoordinator:
             else None
         )
 
+        current = await self._session(session_id)
+        append_event(
+            current,
+            EventType.VOICE_RESPONSE_READY,
+            turn=step.interviewer_turn,
+            payload={
+                "generation": state.generation,
+                "final_to_response_ms": state.last_final_to_response_ms,
+                "interviewer_turn_id": (
+                    step.interviewer_turn.id
+                    if step.interviewer_turn
+                    else None
+                ),
+            },
+        )
+        await self.store.put_session(current)
+
         if step.status is SessionStatus.COMPLETED and step.interviewer_turn is None:
             state.phase = VoicePhase.CLOSED
 
