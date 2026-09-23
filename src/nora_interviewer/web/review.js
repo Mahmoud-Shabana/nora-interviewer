@@ -1,4 +1,5 @@
 const $ = (id) => document.getElementById(id);
+let activeSessionId = null;
 
 async function jsonFetch(url, options = {}) {
   const response = await fetch(url, {
@@ -89,7 +90,36 @@ async function reviewAppeal(sessionId, appealId) {
   }
 }
 
+function downloadJson(filename, payload) {
+  const blob = new Blob(
+    [JSON.stringify(payload, null, 2)],
+    {type: "application/json"},
+  );
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function exportBundle() {
+  if (!activeSessionId) return;
+  try {
+    const bundle = await jsonFetch(
+      `/v1/review/sessions/${activeSessionId}/bundle`
+    );
+    downloadJson(
+      `nora-review-${activeSessionId}.json`,
+      bundle,
+    );
+  } catch (error) {
+    window.alert(error.message);
+  }
+}
+
 function renderReport(report) {
+  activeSessionId = report.session_id;
   $("emptyState").classList.add("hidden");
   $("report").classList.remove("hidden");
 
@@ -227,3 +257,5 @@ async function loadReport(sessionId, button) {
 $("refreshQueue").addEventListener("click", loadQueue);
 $("showAll").addEventListener("change", loadQueue);
 loadQueue();
+
+$("exportBundle").addEventListener("click", exportBundle);
