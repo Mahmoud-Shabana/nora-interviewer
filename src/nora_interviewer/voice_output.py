@@ -3,12 +3,17 @@ from __future__ import annotations
 from pydantic import Field
 
 from .models import StrictModel
+from .provider_health import ProviderHealthState
 from .providers.streaming_tts import TtsAudioConfig
 
 
 class VoiceTransportCapabilities(StrictModel):
     streaming_stt_enabled: bool
+    streaming_stt_available: bool
     streaming_tts_enabled: bool
+    streaming_tts_available: bool
+    stt_health: ProviderHealthState
+    tts_health: ProviderHealthState
     stt_protocol: str | None = None
     tts_protocol: str | None = None
     preferred_tts_config: TtsAudioConfig = Field(
