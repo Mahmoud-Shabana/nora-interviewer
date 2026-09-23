@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .authorization import AccessPolicy, Permission, Principal
+from .capabilities import SystemCapabilities, describe_capabilities
 from .coding import CodingChallengeRequest
 from .config import (
     build_brain,
@@ -47,6 +48,8 @@ from .voice import (
     VoiceTurnResult,
 )
 from .web import WEB_DIR, render_interview_room
+
+API_VERSION = "0.4.0-dev"
 
 store = build_store()
 service = InterviewService(
@@ -93,7 +96,7 @@ def require_global_permission(
 
 app = FastAPI(
     title="Nora Interviewer",
-    version="0.4.0-dev",
+    version=API_VERSION,
     description="Provider-neutral orchestration API for auditable AI interviews.",
 )
 app.mount("/assets", StaticFiles(directory=WEB_DIR), name="assets")
@@ -107,6 +110,25 @@ async def home() -> HTMLResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get(
+    "/v1/system/capabilities",
+    response_model=SystemCapabilities,
+)
+async def system_capabilities(
+    principal: Principal = Depends(current_principal),
+) -> SystemCapabilities:
+    require_global_permission(
+        principal,
+        Permission.READ_SYSTEM,
+    )
+    return describe_capabilities(
+        api_version=API_VERSION,
+        store=store,
+        principal_resolver=principal_resolver,
+        service=service,
+    )
 
 
 @app.post(
