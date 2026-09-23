@@ -21,6 +21,10 @@ class SystemCapabilities(StrictModel):
     event_replay: bool = True
     counterfactual_replay: bool = True
     retention_manager: bool = True
+    optimistic_concurrency: bool = True
+    recruiter_review_queue: bool = True
+    recruiter_review_bundle: bool = True
+    recruiter_review_console: bool = True
     voxrubric_export: bool = True
 
 
