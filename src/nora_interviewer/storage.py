@@ -115,7 +115,3 @@ class InMemoryStore:
 
     async def close(self) -> None:
         return None
-
-
-async def _noop_close() -> None:
-    return None
