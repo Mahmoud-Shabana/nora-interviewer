@@ -6,6 +6,10 @@ from datetime import datetime, timezone
 from pydantic import Field
 
 from .audio_stream_manager import AudioStreamManager
+from .http_metrics import (
+    HttpMetricsSnapshot,
+    HttpRequestMetrics,
+)
 from .models import StrictModel
 from .provider_health import (
     ProviderHealthRegistry,
@@ -34,6 +38,9 @@ class OperationalSnapshot(StrictModel):
     voice_events_current: int = Field(ge=0)
     tool_invocations_current: int = Field(ge=0)
     evidence_judge_runs_current: int = Field(ge=0)
+    http: HttpMetricsSnapshot = Field(
+        default_factory=HttpMetricsSnapshot
+    )
 
 
 class OperationsService:
@@ -47,12 +54,14 @@ class OperationsService:
         provider_health: ProviderHealthRegistry,
         audio_stream_manager: AudioStreamManager,
         tts_bridge: VoiceOutputBridge,
+        http_metrics: HttpRequestMetrics | None = None,
     ) -> None:
         self.store = store
         self.review_service = review_service
         self.provider_health = provider_health
         self.audio_stream_manager = audio_stream_manager
         self.tts_bridge = tts_bridge
+        self.http_metrics = http_metrics
 
     async def snapshot(self) -> OperationalSnapshot:
         sessions = await self.store.list_sessions()
@@ -104,6 +113,11 @@ class OperationsService:
             voice_events_current=voice_events,
             tool_invocations_current=tool_invocations,
             evidence_judge_runs_current=judge_runs,
+            http=(
+                await self.http_metrics.snapshot()
+                if self.http_metrics is not None
+                else HttpMetricsSnapshot()
+            ),
         )
 
 
@@ -213,6 +227,48 @@ def render_prometheus(
             "nora_voice_provider_circuit_open_seconds"
             f'{{key="{_label(provider.key)}"}} '
             f"{provider.circuit_open_seconds_remaining:g}"
+        )
+
+    http = snapshot.http
+    lines.extend([
+        "# HELP nora_http_requests_total HTTP requests by bounded route template and status class.",
+        "# TYPE nora_http_requests_total counter",
+        "# HELP nora_http_requests_in_flight HTTP requests currently being processed.",
+        "# TYPE nora_http_requests_in_flight gauge",
+        f"nora_http_requests_in_flight {http.in_flight}",
+        "# HELP nora_http_request_duration_seconds HTTP request duration by bounded route template.",
+        "# TYPE nora_http_request_duration_seconds histogram",
+    ])
+
+    for series in http.series:
+        base_labels = (
+            f'method="{_label(series.method)}",'
+            f'route="{_label(series.route)}",'
+            f'status_class="{_label(series.status_class)}"'
+        )
+        lines.append(
+            f"nora_http_requests_total{{{base_labels}}} "
+            f"{series.requests}"
+        )
+        for upper_bound, count in (
+            series.duration_buckets.items()
+        ):
+            labels = (
+                base_labels
+                + f',le="{_label(upper_bound)}"'
+            )
+            lines.append(
+                "nora_http_request_duration_seconds_bucket"
+                f"{{{labels}}} {count}"
+            )
+        lines.append(
+            "nora_http_request_duration_seconds_sum"
+            f"{{{base_labels}}} "
+            f"{series.duration_seconds_sum:g}"
+        )
+        lines.append(
+            "nora_http_request_duration_seconds_count"
+            f"{{{base_labels}}} {series.requests}"
         )
 
     return "\n".join(lines) + "\n"
