@@ -9,6 +9,7 @@ const state = {
   voiceEnabled: false,
   recognition: null,
   listening: false,
+  paused: false,
 };
 
 function slugify(text, i) {
@@ -207,6 +208,25 @@ function connectSocket() {
       setThinking(true);
       return;
     }
+    if (packet.type === "candidate_control_ack") {
+      const data = packet.data || {};
+      if (data.kind === "thinking_time") {
+        state.paused = true;
+        $("thinkingBtn").textContent = "Resume";
+        $("thinkingBtn").dataset.control = "resume";
+        $("answerBox").disabled = true;
+        setConnection("Paused for thinking time");
+      } else if (data.kind === "resume") {
+        state.paused = false;
+        $("thinkingBtn").textContent = "Thinking time";
+        $("thinkingBtn").dataset.control = "thinking_time";
+        $("answerBox").disabled = false;
+        setConnection("Connected");
+      } else if (data.kind === "correct_last_answer") {
+        setConnection("Transcript correction recorded");
+      }
+      return;
+    }
     if (packet.type === "interviewer_turn") {
       setThinking(false);
       const turn = packet.data;
@@ -230,6 +250,26 @@ function connectSocket() {
       setConnection(packet.error || "Interview error", true);
     }
   };
+}
+
+function sendControl(kind) {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+
+  let text = null;
+  if (kind === "clarify") {
+    text = window.prompt("What part would you like clarified?") || null;
+  } else if (kind === "correct_last_answer") {
+    text = window.prompt("Enter the corrected version of your last answer:");
+    if (!text?.trim()) return;
+  } else if (kind === "candidate_question") {
+    text = window.prompt("What would you like to ask Nora?");
+    if (!text?.trim()) return;
+  }
+
+  state.ws.send(JSON.stringify({
+    type: "candidate_control",
+    data: {kind, text},
+  }));
 }
 
 function sendAnswer(event) {
@@ -260,6 +300,9 @@ async function exportTrace() {
 
 $("setupForm").addEventListener("submit", createInterview);
 $("answerForm").addEventListener("submit", sendAnswer);
+document.querySelectorAll("[data-control]").forEach((button) => {
+  button.addEventListener("click", () => sendControl(button.dataset.control));
+});
 $("exportBtn").addEventListener("click", exportTrace);
 $("voiceBtn").addEventListener("click", toggleVoice);
 $("micBtn").addEventListener("click", toggleMic);
