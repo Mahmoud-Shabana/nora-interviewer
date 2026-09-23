@@ -328,6 +328,7 @@ class InterviewEvent(StrictModel):
 
 class InterviewSession(StrictModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
+    version: int = Field(default=0, ge=0)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
