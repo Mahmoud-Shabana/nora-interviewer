@@ -15,6 +15,7 @@ from .coding import CodingChallengeRequest
 from .config import (
     build_brain,
     build_evidence_judge,
+    build_operational_slo_policy,
     build_principal_resolver,
     build_rubric_drafter,
     build_store,
@@ -90,6 +91,10 @@ from .rubric_drafting import (
     RubricDraftRequest,
 )
 from .rubric_service import RubricWorkflowService
+from .slo import (
+    OperationalSloAssessment,
+    assess_operational_slo,
+)
 from .service import InterviewService
 from .trace_context import (
     reset_correlation_id,
@@ -184,6 +189,7 @@ tts_bridge = VoiceOutputBridge(
 )
 http_metrics = HttpRequestMetrics()
 websocket_metrics = WebSocketMetrics()
+slo_policy = build_operational_slo_policy()
 operations = OperationsService(
     store=store,
     review_service=review_service,
@@ -393,6 +399,24 @@ async def operational_snapshot(
 
 
 @app.get(
+    "/v1/system/slo",
+    response_model=OperationalSloAssessment,
+)
+async def operational_slo(
+    principal: Principal = Depends(current_principal),
+) -> OperationalSloAssessment:
+    require_global_permission(
+        principal,
+        Permission.READ_SYSTEM,
+    )
+    snapshot = await operations.snapshot()
+    return assess_operational_slo(
+        snapshot,
+        slo_policy,
+    )
+
+
+@app.get(
     "/v1/system/metrics",
     response_class=PlainTextResponse,
 )
@@ -404,8 +428,15 @@ async def operational_metrics(
         Permission.READ_SYSTEM,
     )
     snapshot = await operations.snapshot()
+    slo = assess_operational_slo(
+        snapshot,
+        slo_policy,
+    )
     return PlainTextResponse(
-        render_prometheus(snapshot),
+        render_prometheus(
+            snapshot,
+            slo,
+        ),
         media_type="text/plain; version=0.0.4",
         headers={
             "Cache-Control": "no-store",
