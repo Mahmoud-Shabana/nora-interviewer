@@ -887,7 +887,12 @@ async def voice_speech_started(
         principal,
         Permission.USE_VOICE,
     )
-    return await voice.speech_started(session_id)
+    state = await voice.speech_started(session_id)
+    await tts_bridge.cancel_active(
+        session_id=session_id,
+        reason="barge_in",
+    )
+    return state
 
 
 @app.post(
@@ -1039,6 +1044,10 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
                     session=session,
                 )
                 state = await voice.speech_started(session_id)
+                await tts_bridge.cancel_active(
+                    session_id=session_id,
+                    reason="barge_in",
+                )
                 await websocket.send_json(
                     {"type": "voice_state", "data": state.model_dump(mode="json")}
                 )
