@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nora Review Console</title>
+  <link rel="stylesheet" href="/assets/review.css">
+</head>
+<body>
+  <main class="review-shell">
+    <header class="review-topbar">
+      <div>
+        <p class="eyebrow">NORA · HUMAN REVIEW</p>
+        <h1>Evidence Review Console</h1>
+        <p>Review evidence conditions, appeals, integrity signals, and unresolved practical artifacts without collapsing them into an automatic hiring verdict.</p>
+      </div>
+      <a href="/" class="link-button">Candidate room</a>
+    </header>
+
+    <section class="review-grid">
+      <aside class="queue-panel">
+        <div class="panel-head">
+          <div><span class="eyebrow">QUEUE</span><strong>Needs attention</strong></div>
+          <button id="refreshQueue" type="button">Refresh</button>
+        </div>
+        <label class="toggle"><input id="showAll" type="checkbox"> Show sessions without review flags</label>
+        <div id="queue" class="queue"></div>
+      </aside>
+
+      <section class="detail-panel">
+        <div id="emptyState" class="empty-state">
+          <span>◎</span>
+          <h2>Select a session</h2>
+          <p>The report will show competency evidence states and review conditions. Nora does not produce a hire/no-hire decision here.</p>
+        </div>
+
+        <div id="report" class="hidden">
+          <div class="report-head">
+            <div>
+              <p class="eyebrow">SESSION REVIEW</p>
+              <h2 id="reportRole"></h2>
+              <p id="reportCandidate"></p>
+            </div>
+            <span id="reviewBadge" class="review-badge"></span>
+          </div>
+
+          <div class="stats">
+            <div><span>Pending appeals</span><strong id="statAppeals">0</strong></div>
+            <div><span>Integrity signals</span><strong id="statIntegrity">0</strong></div>
+            <div><span>Tool reviews</span><strong id="statTools">0</strong></div>
+            <div><span>Transcript revisions</span><strong id="statRevisions">0</strong></div>
+          </div>
+
+          <section class="report-section">
+            <div class="section-head"><span>Competency evidence</span><small>Evidence state, not a hiring score</small></div>
+            <div id="competencies" class="competencies"></div>
+          </section>
+
+          <section class="report-section">
+            <div class="section-head"><span>Review reasons</span><small>Conditions requiring attention</small></div>
+            <div id="reasons" class="reasons"></div>
+          </section>
+
+          <p id="reportNote" class="report-note"></p>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script src="/assets/review.js"></script>
+</body>
+</html>
