@@ -86,6 +86,7 @@ class JsonWebSocketTtsSession:
                 )
         finally:
             self._closed = True
+            await self.connection.close()
 
     async def cancel(self) -> None:
         if self._closed:
