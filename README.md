@@ -652,6 +652,26 @@ export NORA_SQLITE_PATH=.nora/nora.db
 
 See [Storage Backends](docs/STORAGE.md).
 
+## Session concurrency
+
+Every session carries a monotonic `version`. Stores reject stale writers instead of silently overwriting newer state.
+
+REST clients can additionally use the strong ETag returned by:
+
+```text
+GET /v1/sessions/{id}
+```
+
+and send it back through `If-Match` on mutations. Stale client state returns `412 Precondition Failed`; server-side write races remain protected by storage-level `409 Conflict`.
+
+See [Session Concurrency & ETags](docs/CONCURRENCY.md).
+
+## Session cancellation
+
+`completed` and `cancelled` are separate terminal states. Cancelling an interview closes active tools and realtime voice state while preserving evidence, appeals, and the audit history for later review.
+
+See [Session Lifecycle](docs/SESSION_LIFECYCLE.md).
+
 ---
 
 # 🔑 Authorization
@@ -787,6 +807,7 @@ export NORA_SANDBOX_IMAGE=python:3.12-alpine
 | POST | `/v1/jobs` |
 | POST | `/v1/sessions` |
 | POST | `/v1/sessions/{id}/start` |
+| POST | `/v1/sessions/{id}/cancel` |
 | POST | `/v1/sessions/{id}/responses` |
 | POST | `/v1/sessions/{id}/controls` |
 
@@ -928,6 +949,8 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Independent Evidence Judge](docs/EVIDENCE_JUDGE.md)
 - [Authorization Model](docs/AUTHORIZATION.md)
 - [Storage Backends](docs/STORAGE.md)
+- [Session Concurrency & ETags](docs/CONCURRENCY.md)
+- [Session Lifecycle](docs/SESSION_LIFECYCLE.md)
 - [Data Retention](docs/RETENTION.md)
 - [Tamper-Evident Audit Chain](docs/AUDIT_CHAIN.md)
 - [Changelog](CHANGELOG.md)
@@ -965,6 +988,8 @@ Nora is intentionally conservative around high-stakes behavior.
 - [x] Strict literal quote grounding
 - [x] Non-fatal semantic judge failure audit
 - [x] Independent judge provider configuration
+- [x] Multi-model evidence judge ensemble
+- [x] Evidence-judge disagreement audit trail
 - [x] Role/permission authorization policy
 - [x] Candidate session ownership enforcement
 - [x] REST + WebSocket authorization boundary
@@ -977,11 +1002,15 @@ Nora is intentionally conservative around high-stakes behavior.
 - [x] Replay-time audit-chain verification
 - [x] Independently verifiable VoxRubric audit export
 - [x] Protected system-capabilities endpoint
+- [x] Optimistic session versioning
+- [x] REST ETag / If-Match preconditions
+- [x] Explicit cancelled session lifecycle
+- [x] Tool shutdown on cancellation
+- [x] Realtime voice shutdown on cancellation
 
 ## 🚧 In progress
 
 - [ ] Semantic evidence calibration benchmark packs
-- [ ] Multi-judge evidence disagreement analysis
 
 ## 🧭 Next
 
