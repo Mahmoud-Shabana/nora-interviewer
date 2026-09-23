@@ -224,6 +224,14 @@ class VoiceStreamBridge:
             buffered_bytes=state.buffered_bytes,
         )
 
+    async def commit(
+        self,
+        *,
+        stream_id: str,
+    ) -> None:
+        record = self._provider(stream_id)
+        await record.session.commit()
+
     async def next_event(
         self,
         *,
