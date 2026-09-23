@@ -1228,17 +1228,17 @@ async def audio_socket(
                 active_stream_id = (
                     opened.state.stream_id
                 )
-                event_task = asyncio.create_task(
-                    pump_events(
-                        active_stream_id
-                    )
-                )
                 await send_json({
                     "type": "stream_opened",
                     "data": opened.model_dump(
                         mode="json"
                     ),
                 })
+                event_task = asyncio.create_task(
+                    pump_events(
+                        active_stream_id
+                    )
+                )
                 continue
 
             if message_type == "reconnect":
@@ -1278,11 +1278,6 @@ async def audio_socket(
                 active_stream_id = (
                     request.stream_id
                 )
-                event_task = asyncio.create_task(
-                    pump_events(
-                        active_stream_id
-                    )
-                )
                 await send_json({
                     "type": "stream_reconnected",
                     "data": (
@@ -1293,6 +1288,11 @@ async def audio_socket(
                         .model_dump(mode="json")
                     ),
                 })
+                event_task = asyncio.create_task(
+                    pump_events(
+                        active_stream_id
+                    )
+                )
                 continue
 
             if message_type == "chunk":
