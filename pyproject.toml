@@ -19,9 +19,15 @@ dependencies = [
 
 [project.optional-dependencies]
 auth = ["PyJWT[crypto]>=2.14,<3"]
+postgres = [
+  "psycopg[binary]>=3.2,<4",
+  "psycopg-pool>=3.2,<4",
+]
 dev = [
   "pytest>=8",
   "PyJWT[crypto]>=2.14,<3",
+  "psycopg[binary]>=3.2,<4",
+  "psycopg-pool>=3.2,<4",
 ]
 
 [project.scripts]
