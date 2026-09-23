@@ -33,6 +33,7 @@ class Permission(str, Enum):
     RUN_DECISION_REPLAY = "run_decision_replay"
     EXPORT_TRACE = "export_trace"
     USE_VOICE = "use_voice"
+    RUN_RETENTION = "run_retention"
 
 
 class Principal(StrictModel):
