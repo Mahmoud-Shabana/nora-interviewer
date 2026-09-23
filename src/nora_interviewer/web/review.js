@@ -49,6 +49,26 @@ function renderQueue(items) {
   }
 }
 
+async function reviewIntegrity(sessionId, signalId) {
+  const note = window.prompt("Integrity review note:");
+  if (!note || note.trim().length < 2) return;
+
+  try {
+    await jsonFetch(
+      `/v1/sessions/${sessionId}/integrity-signals/${signalId}/review`,
+      {
+        method: "POST",
+        body: JSON.stringify({note: note.trim()}),
+      },
+    );
+    await loadQueue();
+    const active = document.querySelector(`[data-session-id="${sessionId}"]`);
+    await loadReport(sessionId, active);
+  } catch (error) {
+    window.alert(error.message);
+  }
+}
+
 async function reviewAppeal(sessionId, appealId) {
   const note = window.prompt("Reviewer note:");
   if (!note || note.trim().length < 2) return;
@@ -142,6 +162,7 @@ function renderReport(report) {
     for (const signal of report.integrity) {
       const card = document.createElement("article");
       card.className = "integrity-card";
+      const reviewed = signal.review_status === "reviewed";
       card.innerHTML = `
         <div class="integrity-head">
           <strong>${signal.kind.replaceAll("_", " ")}</strong>
@@ -149,7 +170,17 @@ function renderReport(report) {
         </div>
         <p>${signal.note}</p>
         <small>Human review required · not proof of misconduct</small>
+        ${reviewed
+          ? `<div class="review-resolution"><small>Reviewed by ${signal.reviewed_by || "reviewer"}</small><p>${signal.review_note || ""}</p></div>`
+          : '<button type="button" class="resolve-integrity">Review signal</button>'
+        }
       `;
+      if (!reviewed) {
+        card.querySelector(".resolve-integrity").addEventListener(
+          "click",
+          () => reviewIntegrity(report.session_id, signal.id),
+        );
+      }
       integrity.appendChild(card);
     }
   }
