@@ -104,3 +104,15 @@ textarea{resize:vertical}
 .candidate-controls{display:flex;flex-wrap:wrap;gap:7px;padding:12px 18px;border-top:1px solid var(--line);background:rgba(255,255,255,.012)}
 .candidate-controls button{border:1px solid var(--line);background:#121821;color:var(--muted);border-radius:999px;padding:7px 10px;font-size:11px}
 .candidate-controls button:hover{color:var(--text);border-color:#3b4658;background:#171e29}
+
+.tool-workspace{margin:18px 18px 0;border:1px solid var(--line);border-radius:18px;background:#0b1017;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.22)}
+.tool-head{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 18px 10px;border-bottom:1px solid var(--line)}
+.tool-head h3{margin:0;font-size:18px;letter-spacing:-.025em}.tool-head .eyebrow{margin-bottom:5px}
+.tool-instructions{padding:14px 18px 4px;margin:0;color:var(--soft);font-size:13px;line-height:1.65}
+.tool-tests{margin:10px 18px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#101720;color:var(--muted);font-size:11px}
+.tool-tests strong{color:var(--soft)}.tool-tests ul{margin:8px 0 0;padding-left:18px}.tool-tests li{margin:5px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.tool-editor{display:block;width:calc(100% - 36px);margin:12px 18px;min-height:190px;background:#080c12;border:1px solid var(--line);border-radius:12px}
+.tool-editor.code-editor{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.55;tab-size:4}
+.tool-actions{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 18px 16px;color:var(--muted);font-size:11px}
+.tool-submit{width:auto;min-width:170px;gap:18px}.tool-result{margin:0 18px 18px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;color:var(--soft);font-size:12px;background:rgba(139,233,199,.04)}
+.tool-reopen{align-self:flex-start;margin:12px 20px 0;padding:8px 11px;border:1px solid var(--line);background:#121821;color:var(--accent);border-radius:999px;font-size:11px}
