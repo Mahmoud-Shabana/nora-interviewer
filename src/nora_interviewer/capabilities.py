@@ -27,6 +27,7 @@ class SystemCapabilities(StrictModel):
     recruiter_review_console: bool = True
     session_etags: bool = True
     session_cancellation: bool = True
+    storage_readiness: bool = True
     jwt_jwks_auth: bool = False
     evidence_judge_ensemble: bool = False
     voxrubric_export: bool = True
