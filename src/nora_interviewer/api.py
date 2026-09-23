@@ -20,6 +20,7 @@ from .config import (
     build_store,
     build_streaming_speech_provider,
     build_streaming_tts_provider,
+    build_vad_config,
     build_voice_provider_health_registry,
 )
 from .counterfactual import CounterfactualReplayReport
@@ -155,6 +156,7 @@ review_service = ReviewService(store=store)
 raw_streaming_speech_provider = build_streaming_speech_provider()
 raw_streaming_tts_provider = build_streaming_tts_provider()
 voice_provider_health = build_voice_provider_health_registry()
+vad_config = build_vad_config()
 streaming_speech_provider = GuardedStreamingSpeechProvider(
     inner=raw_streaming_speech_provider,
     registry=voice_provider_health,
@@ -168,6 +170,7 @@ audio_bridge = VoiceStreamBridge(
     manager=audio_stream_manager,
     provider=streaming_speech_provider,
     voice=voice,
+    vad_config=vad_config,
 )
 tts_bridge = VoiceOutputBridge(
     store=store,
