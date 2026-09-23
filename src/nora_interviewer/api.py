@@ -393,10 +393,15 @@ async def export_voxrubric(
     "/v1/sessions/{session_id}/voice",
     response_model=VoiceSessionState,
 )
-async def voice_state(session_id: str) -> VoiceSessionState:
-    session = await store.get_session(session_id)
-    if not session:
-        raise HTTPException(404, "Session not found")
+async def voice_state(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> VoiceSessionState:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.USE_VOICE,
+    )
     return voice.state(session_id)
 
 
@@ -404,7 +409,15 @@ async def voice_state(session_id: str) -> VoiceSessionState:
     "/v1/sessions/{session_id}/voice/speech-started",
     response_model=VoiceSessionState,
 )
-async def voice_speech_started(session_id: str) -> VoiceSessionState:
+async def voice_speech_started(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> VoiceSessionState:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.USE_VOICE,
+    )
     return await voice.speech_started(session_id)
 
 
@@ -415,7 +428,13 @@ async def voice_speech_started(session_id: str) -> VoiceSessionState:
 async def voice_transcript_partial(
     session_id: str,
     event: TranscriptEvent,
+    principal: Principal = Depends(current_principal),
 ) -> VoiceSessionState:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.USE_VOICE,
+    )
     return await voice.transcript_partial(session_id, event)
 
 
@@ -426,7 +445,13 @@ async def voice_transcript_partial(
 async def voice_transcript_final(
     session_id: str,
     event: TranscriptEvent,
+    principal: Principal = Depends(current_principal),
 ) -> VoiceTurnResult:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.USE_VOICE,
+    )
     return await voice.transcript_final(session_id, event)
 
 
@@ -437,7 +462,13 @@ async def voice_transcript_final(
 async def voice_tts_started(
     session_id: str,
     event: TtsLifecycleEvent,
+    principal: Principal = Depends(current_principal),
 ) -> VoiceSessionState:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.USE_VOICE,
+    )
     return await voice.tts_started(session_id, event)
 
 
@@ -448,7 +479,13 @@ async def voice_tts_started(
 async def voice_tts_completed(
     session_id: str,
     event: TtsLifecycleEvent,
+    principal: Principal = Depends(current_principal),
 ) -> VoiceSessionState:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.USE_VOICE,
+    )
     return await voice.tts_completed(session_id, event)
 
 
@@ -459,12 +496,33 @@ async def voice_tts_completed(
 async def voice_tts_cancelled(
     session_id: str,
     event: TtsLifecycleEvent,
+    principal: Principal = Depends(current_principal),
 ) -> VoiceSessionState:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.USE_VOICE,
+    )
     return await voice.tts_cancelled(session_id, event)
 
 
 @app.websocket("/v1/ws/interviews/{session_id}")
 async def interview_socket(websocket: WebSocket, session_id: str) -> None:
+    try:
+        principal = principal_resolver.resolve(websocket.headers)
+        session = await store.get_session(session_id)
+        if not session:
+            await websocket.close(code=1008)
+            return
+        AccessPolicy.require(
+            principal,
+            Permission.RUN_INTERVIEW,
+            session=session,
+        )
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+
     await websocket.accept()
     try:
         step = await service.start(session_id)
@@ -486,6 +544,11 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
                 continue
 
             if event_type == "candidate_control":
+                AccessPolicy.require(
+                    principal,
+                    Permission.CANDIDATE_CONTROL,
+                    session=session,
+                )
                 request = CandidateControlRequest.model_validate(event.get("data", {}))
                 result = await service.candidate_control(session_id, request)
                 await websocket.send_json(
@@ -501,6 +564,11 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
                 continue
 
             if event_type == "voice_speech_started":
+                AccessPolicy.require(
+                    principal,
+                    Permission.USE_VOICE,
+                    session=session,
+                )
                 state = await voice.speech_started(session_id)
                 await websocket.send_json(
                     {"type": "voice_state", "data": state.model_dump(mode="json")}
@@ -508,6 +576,11 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
                 continue
 
             if event_type == "voice_transcript_partial":
+                AccessPolicy.require(
+                    principal,
+                    Permission.USE_VOICE,
+                    session=session,
+                )
                 transcript_event = TranscriptEvent.model_validate(event.get("data", {}))
                 state = await voice.transcript_partial(session_id, transcript_event)
                 await websocket.send_json(
@@ -516,6 +589,11 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
                 continue
 
             if event_type == "voice_transcript_final":
+                AccessPolicy.require(
+                    principal,
+                    Permission.USE_VOICE,
+                    session=session,
+                )
                 transcript_event = TranscriptEvent.model_validate(event.get("data", {}))
                 await websocket.send_json({"type": "candidate_ack"})
                 voice_result = await voice.transcript_final(
@@ -554,6 +632,11 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
                 "voice_tts_completed",
                 "voice_tts_cancelled",
             }:
+                AccessPolicy.require(
+                    principal,
+                    Permission.USE_VOICE,
+                    session=session,
+                )
                 lifecycle = TtsLifecycleEvent.model_validate(event.get("data", {}))
                 if event_type == "voice_tts_started":
                     state = await voice.tts_started(session_id, lifecycle)
@@ -577,6 +660,11 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
                 )
                 continue
 
+            AccessPolicy.require(
+                principal,
+                Permission.RUN_INTERVIEW,
+                session=session,
+            )
             await websocket.send_json({"type": "candidate_ack"})
             step = await service.answer(session_id, str(event["text"]).strip())
             if step.interviewer_turn:
