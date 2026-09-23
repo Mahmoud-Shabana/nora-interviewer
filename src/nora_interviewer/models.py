@@ -223,6 +223,10 @@ class CandidateAppealRequest(StrictModel):
     turn_ids: list[str] = Field(default_factory=list)
 
 
+class AppealReviewSubmission(StrictModel):
+    note: str = Field(min_length=2, max_length=5000)
+
+
 class AppealReviewRequest(StrictModel):
     reviewer_id: str = Field(min_length=1, max_length=256)
     note: str = Field(min_length=2, max_length=5000)
