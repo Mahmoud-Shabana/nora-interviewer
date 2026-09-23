@@ -43,6 +43,7 @@ from .models import (
 )
 from .replay import ReplayState
 from .review import RecruiterSessionReport, ReviewQueueItem
+from .review_bundle import ReviewBundle, build_review_bundle
 from .review_service import ReviewService
 from .retention import RetentionManager, RetentionReport, RetentionRequest
 from .service import InterviewService
@@ -190,6 +191,27 @@ async def recruiter_session_report(
         Permission.READ_RECRUITER_REPORT,
     )
     return await review_service.session_report(session_id)
+
+
+@app.get(
+    "/v1/review/sessions/{session_id}/bundle",
+    response_model=ReviewBundle,
+)
+async def recruiter_review_bundle(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> ReviewBundle:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.EXPORT_REVIEW_BUNDLE,
+    )
+    report = await review_service.session_report(session_id)
+    trace = await service.export_voxrubric(session_id)
+    return build_review_bundle(
+        report=report,
+        trace=trace,
+    )
 
 
 @app.post("/v1/jobs", response_model=JobSpec, status_code=201)
