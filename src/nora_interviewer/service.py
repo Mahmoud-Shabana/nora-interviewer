@@ -4,24 +4,42 @@ from time import perf_counter
 
 from fastapi import HTTPException
 
+from .audit import append_event
+from .evidence import EvidenceGraph
 from .models import (
+    CandidateAppeal,
+    CandidateAppealRequest,
     CreateSession,
+    EvidenceObservation,
+    EventType,
+    InterviewEvent,
     InterviewSession,
     JobSpec,
+    QuestionLane,
     SessionStatus,
     SessionStep,
     Speaker,
+    TranscriptCorrectionRequest,
+    TranscriptRevision,
     Turn,
     VoxRubricTrace,
 )
+from .planner import DualLanePlanner
 from .providers.base import InterviewBrain
+from .replay import ReplayState, replay_events
 from .storage import InMemoryStore
 
 
 class InterviewService:
-    def __init__(self, store: InMemoryStore, brain: InterviewBrain) -> None:
+    def __init__(
+        self,
+        store: InMemoryStore,
+        brain: InterviewBrain,
+        planner: DualLanePlanner | None = None,
+    ) -> None:
         self.store = store
         self.brain = brain
+        self.planner = planner or DualLanePlanner()
 
     async def create_job(self, job: JobSpec) -> JobSpec:
         await self.store.put_job(job)
@@ -38,6 +56,12 @@ class InterviewService:
             candidate_ref=request.candidate_ref,
             locale=request.locale,
         )
+        EvidenceGraph.initialize(session, job)
+        append_event(
+            session,
+            EventType.SESSION_CREATED,
+            payload={"job_id": job.id, "locale": session.locale},
+        )
         await self.store.put_session(session)
         return session
 
@@ -52,9 +76,15 @@ class InterviewService:
                 status=session.status,
                 interviewer_turn=last if last.speaker is Speaker.INTERVIEWER else None,
             )
-        started = perf_counter()
-        decision = await self.brain.opening(session, job)
-        latency_ms = max(0, round((perf_counter() - started) * 1000))
+
+        append_event(session, EventType.INTERVIEW_STARTED)
+        decision = self.planner.next_anchor(session, job)
+        latency_ms = 0
+        if decision is None:
+            started = perf_counter()
+            decision = await self.brain.opening(session, job)
+            latency_ms = max(0, round((perf_counter() - started) * 1000))
+
         turn = self._apply_decision(session, decision, latency_ms=latency_ms)
         session.status = SessionStatus.RUNNING
         await self.store.put_session(session)
@@ -68,19 +98,160 @@ class InterviewService:
         if session.status is SessionStatus.COMPLETED:
             raise HTTPException(409, "Interview is already complete")
 
-        candidate = Turn(speaker=Speaker.CANDIDATE, text=text)
+        previous_question = next(
+            (turn for turn in reversed(session.turns) if turn.speaker is Speaker.INTERVIEWER),
+            None,
+        )
+        candidate = Turn(
+            speaker=Speaker.CANDIDATE,
+            text=text,
+            parent_turn_id=previous_question.id if previous_question else None,
+        )
         session.turns.append(candidate)
+        append_event(
+            session,
+            EventType.CANDIDATE_TURN,
+            turn=candidate,
+            payload={"parent_turn_id": candidate.parent_turn_id},
+        )
+
+        if previous_question and previous_question.competency_tags:
+            created = EvidenceGraph.record_candidate_claim(
+                session,
+                question_turn_id=previous_question.id,
+                answer_turn_id=candidate.id,
+                competency_ids=previous_question.competency_tags,
+            )
+            for item in created:
+                append_event(
+                    session,
+                    EventType.EVIDENCE_OBSERVED,
+                    turn=candidate,
+                    payload={
+                        "evidence_id": item.id,
+                        "state": item.state.value,
+                        "source": item.source,
+                    },
+                )
+
         started = perf_counter()
-        decision = await self.brain.after_answer(session, job)
+        adaptive_decision = await self.brain.after_answer(session, job)
         latency_ms = max(0, round((perf_counter() - started) * 1000))
+
+        # Preserve a genuine follow-up when the brain wants to probe the latest
+        # answer. Otherwise, schedule a standardized anchor if the target share
+        # has fallen below the job's configured anchor ratio.
+        if adaptive_decision.parent_turn_id:
+            decision = adaptive_decision
+        else:
+            decision = self.planner.next_anchor(session, job) or adaptive_decision
+            if self.planner.lane_for(decision) is QuestionLane.ANCHOR:
+                latency_ms = 0
+
         interviewer = self._apply_decision(session, decision, latency_ms=latency_ms)
+
         if decision.parent_turn_id and decision.competency_tags:
             key = decision.competency_tags[0]
             session.followups_by_competency[key] = session.followups_by_competency.get(key, 0) + 1
         if decision.completes_interview:
             session.status = SessionStatus.COMPLETED
+            append_event(session, EventType.SESSION_COMPLETED)
+
         await self.store.put_session(session)
         return SessionStep(session_id=session.id, status=session.status, interviewer_turn=interviewer)
+
+    async def correct_transcript(
+        self,
+        session_id: str,
+        request: TranscriptCorrectionRequest,
+    ) -> TranscriptRevision:
+        session, _ = await self._get(session_id)
+        turn = next((t for t in session.turns if t.id == request.turn_id), None)
+        if turn is None:
+            raise HTTPException(404, "Turn not found")
+        if turn.speaker is not Speaker.CANDIDATE:
+            raise HTTPException(400, "Only candidate transcript turns can be corrected")
+
+        revision = TranscriptRevision(
+            turn_id=turn.id,
+            original_text=turn.text,
+            corrected_text=request.corrected_text,
+            reason=request.reason,
+        )
+        session.transcript_revisions.append(revision)
+        turn.text = request.corrected_text
+        turn.metadata["transcript_revision_id"] = revision.id
+        turn.metadata["transcript_revision_count"] = sum(
+            1 for item in session.transcript_revisions if item.turn_id == turn.id
+        )
+        append_event(
+            session,
+            EventType.TRANSCRIPT_CORRECTED,
+            turn=turn,
+            payload={
+                "revision_id": revision.id,
+                "original_text": revision.original_text,
+                "corrected_text": revision.corrected_text,
+                "reason": revision.reason,
+            },
+        )
+        await self.store.put_session(session)
+        return revision
+
+    async def submit_appeal(
+        self,
+        session_id: str,
+        request: CandidateAppealRequest,
+    ) -> CandidateAppeal:
+        session, _ = await self._get(session_id)
+        known_turn_ids = {turn.id for turn in session.turns}
+        unknown = [turn_id for turn_id in request.turn_ids if turn_id not in known_turn_ids]
+        if unknown:
+            raise HTTPException(400, f"Appeal references unknown turns: {unknown}")
+
+        appeal = CandidateAppeal(message=request.message, turn_ids=request.turn_ids)
+        session.appeals.append(appeal)
+        append_event(
+            session,
+            EventType.APPEAL_SUBMITTED,
+            payload={"appeal_id": appeal.id, "turn_ids": appeal.turn_ids},
+        )
+        await self.store.put_session(session)
+        return appeal
+
+    async def observe_evidence(
+        self,
+        session_id: str,
+        observation: EvidenceObservation,
+    ):
+        session, job = await self._get(session_id)
+        try:
+            item = EvidenceGraph.apply_observation(session, job, observation)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        turn = next(t for t in session.turns if t.id == observation.turn_id)
+        append_event(
+            session,
+            EventType.EVIDENCE_OBSERVED,
+            turn=turn,
+            payload={
+                "evidence_id": item.id,
+                "competency_id": observation.competency_id,
+                "state": observation.state.value,
+                "confidence": observation.confidence,
+                "source": item.source,
+            },
+        )
+        await self.store.put_session(session)
+        return session.evidence_graph[observation.competency_id]
+
+    async def events(self, session_id: str) -> list[InterviewEvent]:
+        session, _ = await self._get(session_id)
+        return session.events
+
+    async def replay(self, session_id: str) -> ReplayState:
+        session, _ = await self._get(session_id)
+        return replay_events(session.id, session.events)
 
     async def export_voxrubric(self, session_id: str) -> VoxRubricTrace:
         session, job = await self._get(session_id)
@@ -96,6 +267,12 @@ class InterviewService:
             }
             for t in session.turns
         ]
+        anchor_turns = sum(
+            1
+            for turn in session.turns
+            if turn.speaker is Speaker.INTERVIEWER
+            and turn.metadata.get("question_lane") == QuestionLane.ANCHOR.value
+        )
         return VoxRubricTrace(
             session_id=session.id,
             role=job.title,
@@ -106,6 +283,19 @@ class InterviewService:
                 "job_id": job.id,
                 "candidate_ref": session.candidate_ref,
                 "status": session.status.value,
+                "anchor_ratio_target": job.anchor_ratio,
+                "anchor_turns": anchor_turns,
+                "interviewer_turns": session.asked_questions,
+                "evidence_graph": {
+                    key: value.model_dump(mode="json")
+                    for key, value in session.evidence_graph.items()
+                },
+                "transcript_revisions": [
+                    revision.model_dump(mode="json")
+                    for revision in session.transcript_revisions
+                ],
+                "appeals": [appeal.model_dump(mode="json") for appeal in session.appeals],
+                "event_count": len(session.events),
             },
         )
 
@@ -118,16 +308,40 @@ class InterviewService:
             raise HTTPException(500, "Session references a missing job")
         return session, job
 
-    @staticmethod
-    def _apply_decision(session: InterviewSession, decision, *, latency_ms: int | None = None) -> Turn:
+    def _apply_decision(
+        self,
+        session: InterviewSession,
+        decision,
+        *,
+        latency_ms: int | None = None,
+    ) -> Turn:
+        lane = self.planner.lane_for(decision)
         turn = Turn(
             speaker=Speaker.INTERVIEWER,
             text=decision.text,
             parent_turn_id=decision.parent_turn_id,
             competency_tags=decision.competency_tags,
             response_latency_ms=latency_ms,
-            metadata={"decision_reason": decision.reason, "latency_scope": "brain_only"},
+            metadata={
+                "decision_reason": decision.reason,
+                "latency_scope": "brain_only" if latency_ms else "planner",
+                "question_lane": lane.value,
+            },
         )
         session.turns.append(turn)
         session.asked_questions += 1
+        if lane is QuestionLane.ANCHOR:
+            for competency_id in decision.competency_tags:
+                if competency_id not in session.asked_anchor_competencies:
+                    session.asked_anchor_competencies.append(competency_id)
+        append_event(
+            session,
+            EventType.INTERVIEWER_TURN,
+            turn=turn,
+            payload={
+                "question_lane": lane.value,
+                "decision_reason": decision.reason,
+                "competency_tags": decision.competency_tags,
+            },
+        )
         return turn
