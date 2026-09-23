@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from .review import (
+    EvidenceReevaluationQueueItem,
     RecruiterSessionReport,
     ReviewDashboardSummary,
     ReviewQueueItem,
@@ -78,6 +79,59 @@ class ReviewService:
             stale_evidence_runs=stale_evidence_runs,
             failed_evidence_runs=failed_evidence_runs,
             completed_sessions=completed_sessions,
+        )
+
+    async def evidence_reevaluation_queue(
+        self,
+        *,
+        job_id: str | None = None,
+    ) -> list[EvidenceReevaluationQueueItem]:
+        sessions = await self.store.list_sessions()
+        items: list[EvidenceReevaluationQueueItem] = []
+
+        for session in sessions:
+            if job_id is not None and session.job_id != job_id:
+                continue
+
+            job = await self.store.get_job(session.job_id)
+            if job is None:
+                continue
+
+            report = build_recruiter_report(
+                session,
+                job,
+            )
+            for run in report.evidence_judge_runs:
+                if not (run.stale or run.failed):
+                    continue
+                items.append(
+                    EvidenceReevaluationQueueItem(
+                        session_id=session.id,
+                        job_id=session.job_id,
+                        candidate_ref=session.candidate_ref,
+                        role=job.title,
+                        answer_turn_id=run.answer_turn_id,
+                        latest_run_id=run.id,
+                        judge_id=run.judge_id,
+                        stale=run.stale,
+                        failed=run.failed,
+                        transcript_revision_count=(
+                            run.transcript_revision_count
+                        ),
+                        current_transcript_revision_count=(
+                            run.current_transcript_revision_count
+                        ),
+                    )
+                )
+
+        return sorted(
+            items,
+            key=lambda item: (
+                not item.failed,
+                not item.stale,
+                item.session_id,
+                item.answer_turn_id,
+            ),
         )
 
     async def queue(
