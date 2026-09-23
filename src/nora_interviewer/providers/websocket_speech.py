@@ -101,6 +101,7 @@ class JsonWebSocketSpeechSession:
                     )
         finally:
             self._closed = True
+            await self.connection.close()
 
     async def commit(self) -> None:
         await self._send_control({"type": "commit"})
