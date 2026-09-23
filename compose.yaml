@@ -1,0 +1,10 @@
+services:
+  nora:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      NORA_BRAIN_MODE: ${NORA_BRAIN_MODE:-rule}
+      NORA_LLM_BASE_URL: ${NORA_LLM_BASE_URL:-}
+      NORA_LLM_MODEL: ${NORA_LLM_MODEL:-}
+      NORA_LLM_API_KEY: ${NORA_LLM_API_KEY:-}
