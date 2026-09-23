@@ -19,9 +19,11 @@ dependencies = [
 
 [project.optional-dependencies]
 auth = ["PyJWT[crypto]>=2.14,<3"]
+voice = ["websockets>=14,<16"]
 postgres = [
   "psycopg[binary]>=3.2,<4",
   "psycopg-pool>=3.2,<4",
+  "websockets>=14,<16",
 ]
 dev = [
   "pytest>=8",
