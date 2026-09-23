@@ -88,6 +88,13 @@ class EventType(str, Enum):
     TOOL_OPENED = "tool_opened"
     TOOL_SUBMITTED = "tool_submitted"
     TOOL_EVALUATED = "tool_evaluated"
+    VOICE_SPEECH_STARTED = "voice_speech_started"
+    VOICE_TRANSCRIPT_PARTIAL = "voice_transcript_partial"
+    VOICE_TRANSCRIPT_FINAL = "voice_transcript_final"
+    VOICE_TTS_STARTED = "voice_tts_started"
+    VOICE_TTS_COMPLETED = "voice_tts_completed"
+    VOICE_TTS_CANCELLED = "voice_tts_cancelled"
+    VOICE_BARGE_IN = "voice_barge_in"
     SESSION_COMPLETED = "session_completed"
 
 
