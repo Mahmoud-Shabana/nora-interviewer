@@ -289,6 +289,8 @@ class ReviewService:
         unresolved_tools = 0
         stale_evidence_runs = 0
         failed_evidence_runs = 0
+        assigned_reviews = 0
+        unassigned_review_required = 0
         completed_sessions = 0
 
         for session in sessions:
@@ -312,6 +314,22 @@ class ReviewService:
             stale_evidence_runs += report.stale_evidence_runs
             failed_evidence_runs += report.failed_evidence_runs
 
+            active_assignment = next(
+                (
+                    item
+                    for item in report.review_assignments
+                    if item.status in {
+                        ReviewAssignmentStatus.OPEN,
+                        ReviewAssignmentStatus.IN_REVIEW,
+                    }
+                ),
+                None,
+            )
+            if active_assignment is not None:
+                assigned_reviews += 1
+            elif report.requires_human_review:
+                unassigned_review_required += 1
+
         return ReviewDashboardSummary(
             total_sessions=total_sessions,
             review_required=review_required,
@@ -320,6 +338,8 @@ class ReviewService:
             unresolved_tools=unresolved_tools,
             stale_evidence_runs=stale_evidence_runs,
             failed_evidence_runs=failed_evidence_runs,
+            assigned_reviews=assigned_reviews,
+            unassigned_review_required=unassigned_review_required,
             completed_sessions=completed_sessions,
         )
 
@@ -411,6 +431,7 @@ class ReviewService:
             items,
             key=lambda item: (
                 not item.requires_human_review,
+                item.assigned_reviewer_id is not None,
                 -item.failed_evidence_runs,
                 -item.stale_evidence_runs,
                 -item.pending_appeals,
