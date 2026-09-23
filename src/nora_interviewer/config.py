@@ -8,6 +8,8 @@ from .providers.completion import OpenAICompatibleChatProvider
 from .providers.fallback import FallbackBrain
 from .providers.llm_brain import LLMInterviewBrain
 from .providers.rule_based import RuleBasedBrain
+from .sqlite_store import SqliteStore
+from .storage import InMemoryStore
 
 
 def build_brain():
@@ -110,4 +112,39 @@ def build_principal_resolver():
 
     raise RuntimeError(
         f"Unsupported NORA_AUTH_MODE: {mode}"
+    )
+
+
+def build_store():
+    """Build the configured Nora persistence backend.
+
+    memory:
+        Process-local zero-config mode.
+
+    sqlite:
+        Durable local SQLite database for development and single-process
+        deployments.
+    """
+
+    mode = os.getenv(
+        "NORA_STORE_MODE",
+        "memory",
+    ).strip().lower()
+
+    if mode == "memory":
+        return InMemoryStore()
+
+    if mode == "sqlite":
+        path = os.getenv(
+            "NORA_SQLITE_PATH",
+            ".nora/nora.db",
+        ).strip()
+        if not path:
+            raise RuntimeError(
+                "NORA_SQLITE_PATH cannot be empty in sqlite mode"
+            )
+        return SqliteStore(path)
+
+    raise RuntimeError(
+        f"Unsupported NORA_STORE_MODE: {mode}"
     )
