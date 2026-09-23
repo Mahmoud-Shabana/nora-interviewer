@@ -38,6 +38,7 @@ class Permission(str, Enum):
     READ_REVIEW_QUEUE = "read_review_queue"
     READ_RECRUITER_REPORT = "read_recruiter_report"
     REVIEW_APPEAL = "review_appeal"
+    REVIEW_INTEGRITY = "review_integrity"
 
 
 class Principal(StrictModel):
@@ -74,6 +75,7 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.READ_REVIEW_QUEUE,
         Permission.READ_RECRUITER_REPORT,
         Permission.REVIEW_APPEAL,
+        Permission.REVIEW_INTEGRITY,
     },
     ActorRole.REVIEWER: {
         Permission.READ_SESSION,
@@ -87,6 +89,7 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.READ_REVIEW_QUEUE,
         Permission.READ_RECRUITER_REPORT,
         Permission.REVIEW_APPEAL,
+        Permission.REVIEW_INTEGRITY,
     },
     ActorRole.SERVICE: set(Permission),
 }
