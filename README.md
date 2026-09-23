@@ -1,113 +1,410 @@
-# Nora Interviewer
+# 🎙️ Nora Interviewer
 
-> An open interview operating system for auditable, adaptive, multilingual AI interviews.
+<p align="center">
+  <strong>Auditable · Adaptive · Multilingual AI Interview Operating System</strong>
+</p>
 
-Nora is a research-grade interview orchestration platform built around a simple idea:
+<p align="center">
+  Structured enough to be comparable. Adaptive enough to be intelligent. Auditable enough to be trusted.
+</p>
 
-> **Structured enough to be comparable. Adaptive enough to be intelligent. Auditable enough to be trusted.**
+<p align="center">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white">
+  <img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-blue.svg">
+  <img alt="Status Alpha" src="https://img.shields.io/badge/Status-Alpha-orange">
+  <img alt="Release 0.3.0" src="https://img.shields.io/badge/Package-0.3.0-6f42c1">
+  <img alt="Main v0.4 development" src="https://img.shields.io/badge/main-v0.4--dev-8A2BE2">
+  <img alt="CI" src="https://github.com/Mahmoud-Shabana/nora-interviewer/actions/workflows/ci.yml/badge.svg">
+</p>
 
-It is not designed as a black-box candidate scorer. Conversation, evidence, practical artifacts, candidate rights, integrity signals, voice state, and evaluation live in separate inspectable layers.
+<p align="center">
+  <a href="#-why-nora">Why Nora</a> ·
+  <a href="#-capabilities">Capabilities</a> ·
+  <a href="#-architecture">Architecture</a> ·
+  <a href="#-quick-start">Quick Start</a> ·
+  <a href="#-api-surface">API</a> ·
+  <a href="#-security--governance">Security</a> ·
+  <a href="#-roadmap">Roadmap</a>
+</p>
 
-Nora exports its sessions to [VoxRubric](https://github.com/Mahmoud-Shabana/voxrubric) for independent regression and benchmark evaluation.
+---
 
-## Current development: v0.4
+## 🌟 What is Nora?
 
-The package is actively evolving toward v0.4. The current main branch already includes the systems below.
+**Nora Interviewer** is an open interview operating system for building AI-led interviews that remain **inspectable, evidence-grounded, tool-capable, voice-aware, and accountable**.
 
-## Interview intelligence
+Nora is intentionally different from a simple “LLM asks questions and outputs a score” demo.
 
-### Dual-lane protocol
+It separates:
 
-Each role can combine:
+- 🧠 interview reasoning;
+- ⚖️ standardized vs adaptive questioning;
+- 🧩 job competencies;
+- 🧾 evidence and provenance;
+- 🛠️ practical interview tools;
+- 🎙️ realtime voice state;
+- 🧑‍⚖️ candidate rights and appeals;
+- 🛡️ integrity signals;
+- 🧪 replay and counterfactual experiments;
+- 📊 external evaluation through [VoxRubric](https://github.com/Mahmoud-Shabana/voxrubric).
+
+> Nora orchestrates the interview.  
+> It does **not** make an opaque autonomous hiring decision.
+
+---
+
+## 🧭 Project status
+
+| Area | Status |
+|---|---|
+| Published package metadata | **0.3.0** |
+| Main branch | **v0.4 development** |
+| Core orchestration | ✅ Implemented |
+| Dual-lane interviewing | ✅ Implemented |
+| Candidate controls | ✅ Implemented |
+| Skill Evidence Graph | ✅ Implemented |
+| Practical tool framework | ✅ Implemented |
+| Coding sandbox boundary | ✅ Implemented |
+| Realtime voice state machine | ✅ Implemented |
+| Barge-in / interruption flow | ✅ Implemented |
+| Replay / counterfactual analysis | ✅ Implemented |
+| Independent semantic Evidence Judge | 🚧 In progress |
+| Production streaming STT/TTS adapters | 🧭 Planned |
+| Durable production persistence | 🧭 Planned |
+| Recruiter/candidate authorization | 🧭 Planned |
+
+---
+
+## 💡 Why Nora?
+
+Most AI interview systems compress too much responsibility into one model call:
 
 ```text
-standardized anchor questions
-            +
-adaptive investigation
+candidate answer
+      ↓
+LLM
+      ↓
+question + score + judgment + next action
 ```
 
-Anchors preserve comparability across candidates. Adaptive follow-ups investigate the candidate's actual evidence, reasoning, and trade-offs.
+Nora deliberately decomposes the system:
 
-Every interviewer turn records its lane and decision reason.
+```text
+candidate interaction
+        ↓
+interview state
+        ↓
+interview policy / brain
+        ↓
+auditable next action
+        ↓
+evidence + tools + voice events
+        ↓
+independent evaluation
+```
 
-### Structured interview brain
+This gives the system explicit boundaries for **fairness, debugging, reproducibility, tool safety, voice performance, and human review**.
 
-Nora supports:
+---
+
+# ✨ Capabilities
+
+## ⚖️ Dual-lane interviewing
+
+Nora combines two interview lanes:
+
+| Lane | Purpose |
+|---|---|
+| **Anchor** | Standardized questions for comparability |
+| **Adaptive** | Follow-ups driven by candidate evidence and reasoning |
+
+```mermaid
+flowchart LR
+    A[Job competency] --> B{Planner}
+    B -->|Need comparability| C[Anchor question]
+    B -->|Need investigation| D[Adaptive follow-up]
+    C --> E[Candidate answer]
+    D --> E
+    E --> F[Evidence + next state]
+```
+
+Every interviewer turn can retain:
+
+- question lane;
+- competency tags;
+- parent turn;
+- decision reason;
+- response latency.
+
+---
+
+## 🧠 Structured Interview Brain
+
+Nora currently supports:
 
 - deterministic development brain;
 - structured LLM brain;
 - OpenAI-compatible completion provider;
-- deterministic fallback if the primary provider fails;
+- deterministic fallback;
 - explicit question budget;
-- competency state;
+- explicit competency state;
 - job-scoped practical-tool policy;
-- server-side validation of every model-returned competency/tool request.
+- server-side validation of model actions.
 
-The LLM does **not** own session IDs, turn lineage, tool authority, evidence state, appeals, or integrity decisions.
+The LLM does **not** own:
 
-## Candidate controls
+- session IDs;
+- turn lineage;
+- allowed competency IDs;
+- tool authorization;
+- evidence state;
+- transcript revisions;
+- appeals;
+- integrity decisions;
+- final hiring decisions.
 
-Candidates can interact with the interview process explicitly instead of hacking those requests into ordinary answers:
+---
 
-- Repeat
-- Clarify
-- Thinking time
-- Resume
-- Correct last answer
-- Ask Nora
+## 🎛️ Candidate controls
 
-These controls are audited separately and do not silently consume ordinary question budget.
+Candidate intent is represented structurally instead of being mixed into normal answers.
 
-## Skill Evidence Graph
+Supported controls:
 
-A candidate answer does not automatically become a positive skill score.
+- 🔁 **Repeat**
+- 💡 **Clarify**
+- ⏳ **Thinking time**
+- ▶️ **Resume**
+- ✏️ **Correct last answer**
+- ❓ **Ask Nora**
+
+These controls are audited separately and do not silently consume ordinary interview question budget.
+
+---
+
+## 🧾 Skill Evidence Graph
+
+Nora treats evidence as a stateful graph, not a magic score.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unknown
+    Unknown --> Claimed
+    Claimed --> Demonstrated
+    Demonstrated --> Verified
+
+    Claimed --> InsufficientEvidence
+    Demonstrated --> Contradicted
+    Verified --> Contradicted
+```
 
 Current evidence states:
 
-```text
-unknown
-  |
-claimed
-  |
-demonstrated
-  |
-verified
+- `unknown`
+- `claimed`
+- `demonstrated`
+- `verified`
+- `insufficient_evidence`
+- `contradicted`
 
-additional states:
-insufficient_evidence
-contradicted
+An evidence item can carry:
+
+```text
+competency_id
+turn_id
+state
+confidence
+quote
+note
+source
 ```
 
-Evidence carries:
+### Evidence philosophy
 
-- competency ID;
-- source transcript/artifact turn;
-- state;
-- confidence;
-- optional grounded quote;
-- note;
-- source.
+A candidate saying something creates a **claim**.
 
-Practical-tool success currently raises evidence only to `demonstrated`, not automatically to `verified`.
+A successful practical artifact may establish **demonstrated** evidence.
 
-## Candidate rights
+Transcript-only semantic evaluation should not silently upgrade ordinary conversational evidence to **verified**.
 
-Nora implements candidate protections as product behavior:
+---
 
-- explicit consent to AI-led interviewing;
-- separate transcript-processing consent;
-- transcript correction while preserving original text;
-- appeals tied to exact turns;
-- append-only audit events;
-- replay support;
+## 🛠️ Practical interview tools
+
+Nora includes a provider-neutral tool layer.
+
+Current tool categories:
+
+- 💻 Coding
+- 🧠 Case Study
+- 🧩 Whiteboard
+- 📄 Document Analysis
+- 📊 Dataset Tasks
+
+### Job-scoped tool policy
+
+Each role explicitly declares which practical templates the interview agent may request.
+
+The server enforces:
+
+- allowed template IDs;
+- competency restrictions;
+- maximum tool budget;
+- duplicate-template prevention;
+- hidden evaluator state;
+- server-owned instantiation.
+
+```mermaid
+flowchart TD
+    A[Interview Brain] -->|requests template_id| B{Job Tool Policy}
+    B -->|allowed| C[Trusted Server Template Registry]
+    B -->|not allowed| X[Reject request]
+    C --> D[Candidate Workbench]
+    D --> E[Artifact Submission]
+    E --> F[Evaluator / Sandbox / Manual Review]
+    F --> G[Artifact Turn]
+    G --> H[Skill Evidence Graph]
+    H --> I[Post-tool reasoning follow-up]
+```
+
+---
+
+## 💻 Coding sandbox
+
+Candidate code is **not** executed inside the Nora API process.
+
+The optional Docker runner uses:
+
+- disposable containers;
+- network disabled;
+- read-only filesystem;
+- dropped Linux capabilities;
+- `no-new-privileges`;
+- unprivileged UID;
+- PID limit;
+- memory limit;
+- CPU limit;
+- file descriptor limit;
+- execution timeout.
+
+Hidden tests remain server-side and are not included in the public candidate payload.
+
+> The local Docker runner is a development and CI isolation boundary.  
+> It is not presented as a perfect hostile-code security boundary for high-stakes production.
+
+---
+
+## 🔄 Post-tool reasoning
+
+Practical work does not end at “tests passed”.
+
+```mermaid
+sequenceDiagram
+    participant N as Nora
+    participant C as Candidate
+    participant T as Tool
+    participant E as Evaluator
+    participant G as Evidence Graph
+
+    N->>C: Open practical task
+    C->>T: Submit artifact
+    T->>E: Evaluate
+    E-->>N: ToolEvaluation
+    N->>G: Add artifact evidence
+    N->>C: Ask reasoning / trade-off follow-up
+```
+
+This lets Nora assess the reasoning around a solution rather than reducing performance to one pass/fail result.
+
+---
+
+# 🎙️ Realtime voice
+
+Nora has a provider-neutral realtime voice coordinator.
+
+## Voice state machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Listening: speech_started
+    Listening --> Listening: partial transcript
+    Listening --> Processing: final transcript
+    Processing --> Speaking: TTS started
+    Speaking --> Idle: TTS completed
+    Speaking --> Listening: barge-in
+    Speaking --> Idle: TTS cancelled
+    Idle --> Closed: interview complete
+```
+
+Tracked events include:
+
+- `voice_speech_started`
+- `voice_transcript_partial`
+- `voice_transcript_final`
+- `voice_response_ready`
+- `voice_tts_started`
+- `voice_tts_completed`
+- `voice_tts_cancelled`
+- `voice_barge_in`
+
+## Barge-in
+
+When the candidate starts speaking while Nora is speaking:
+
+1. active TTS is cancelled;
+2. an interruption event is recorded;
+3. the voice generation increments;
+4. the state moves to listening;
+5. stale future audio can be discarded.
+
+## Voice latency decomposition
+
+```text
+speech started
+     │
+     ├── speech_to_final_ms
+     ▼
+final transcript
+     │
+     ├── final_to_response_ms
+     ▼
+response ready
+     │
+     ├── response_to_tts_ms
+     ▼
+TTS starts
+```
+
+This lets VoxRubric distinguish slow STT, slow reasoning, and slow TTS startup.
+
+See [docs/VOICE_PROTOCOL.md](docs/VOICE_PROTOCOL.md).
+
+---
+
+# 🧑‍⚖️ Candidate rights
+
+Nora implements candidate protections as executable product behavior.
+
+### Candidate-visible guarantees
+
+- AI interview disclosure;
+- separate transcript consent;
+- transcript correction;
+- preservation of original transcript;
+- appeal tied to exact turns;
 - evidence provenance;
-- human-review-only integrity signals.
+- review-only integrity signals;
+- no hidden sensitive-trait score.
 
-See `docs/CANDIDATE_RIGHTS.md`.
+See [docs/CANDIDATE_RIGHTS.md](docs/CANDIDATE_RIGHTS.md).
 
-## Progressive integrity
+---
 
-Per-session integrity modes:
+## 🛡️ Progressive integrity
+
+Supported modes:
 
 ```text
 none
@@ -117,177 +414,21 @@ secure
 proctored
 ```
 
-An integrity signal is a review input, not a misconduct verdict.
+Integrity signals remain review inputs.
 
-The data model intentionally keeps:
-
-```text
-requires_human_review = true
+```python
+requires_human_review = True
 ```
 
-instead of an automatic rejection field.
+There is intentionally no automatic “candidate cheated → reject” field in the integrity model.
 
-## Practical interview tools
+---
 
-Nora has a provider-neutral interview-tool layer.
+# 🗂️ Event log & replay
 
-Supported tool categories currently include:
+Material actions are recorded as ordered events.
 
-- coding;
-- case study;
-- whiteboard;
-- document analysis;
-- dataset tasks.
-
-### Job-scoped tool policy
-
-A role explicitly lists the practical templates the interview brain is allowed to request.
-
-The model can request only the approved `template_id`. The server validates:
-
-- template authorization;
-- competency policy;
-- maximum tool budget;
-- duplicate-template use;
-- hidden evaluator state.
-
-### Built-in trusted templates
-
-Current server-side templates include:
-
-- Python event de-duplication coding task;
-- bursty API system-design case;
-- service dependency whiteboard;
-- incident-review document exercise.
-
-### Coding sandbox
-
-Coding challenges keep public and hidden tests separate.
-
-Candidate code is **not** executed inside the Nora server process.
-
-The optional local Docker runner uses:
-
-- disposable containers;
-- network disabled;
-- read-only filesystem;
-- dropped Linux capabilities;
-- `no-new-privileges`;
-- unprivileged user;
-- PID limits;
-- memory limits;
-- CPU limits;
-- file-descriptor limits;
-- execution timeout.
-
-If the sandbox is disabled or unavailable, Nora records the submission and returns a manual/external-review result instead of inventing a score.
-
-The local Docker runner is a development/CI isolation layer, not a claim of perfect hostile-code containment for high-stakes production.
-
-## Post-tool reasoning
-
-Submitting an artifact does not end the interview.
-
-The flow is:
-
-```text
-Nora opens tool
-      |
-candidate submits artifact
-      |
-tool evaluator
-      |
-artifact becomes a transcript/provenance turn
-      |
-Skill Evidence Graph update
-      |
-Nora asks a reasoning/trade-off follow-up
-      |
-interview continues
-```
-
-This lets Nora evaluate the reasoning around code or artifacts instead of reducing the task to pass/fail tests.
-
-## Realtime voice architecture
-
-Nora now has a provider-neutral realtime voice lifecycle:
-
-```text
-idle
-  |
-  v
-listening
-  |
-  v
-processing
-  |
-  v
-speaking
-  |
-  v
-idle
-```
-
-The voice coordinator records:
-
-- speech started;
-- partial transcript;
-- final transcript;
-- interviewer response ready;
-- TTS started;
-- TTS completed;
-- TTS cancelled;
-- barge-in.
-
-### Barge-in
-
-If the candidate begins speaking while Nora is speaking:
-
-1. active TTS is cancelled;
-2. an interruption event is recorded;
-3. the voice generation is incremented;
-4. Nora moves immediately to listening;
-5. stale audio can be discarded by future streaming providers.
-
-### Voice latency breakdown
-
-Nora records three separate stages:
-
-```text
-speech -> final transcript
-final transcript -> interviewer response
-response -> TTS start
-```
-
-Those events export directly to VoxRubric, which evaluates lifecycle integrity, latency, and interruption recovery.
-
-See `docs/VOICE_PROTOCOL.md`.
-
-## Browser interview room
-
-The built-in interview room currently includes:
-
-- role setup;
-- competency setup;
-- integrity-mode selection;
-- practical-tool policy selection;
-- realtime WebSocket conversation;
-- Arabic/English locale selection;
-- browser voice demo;
-- candidate control toolbar;
-- practical task workbench;
-- coding editor area;
-- public coding checks;
-- artifact submission;
-- tool-evaluation result display;
-- automatic post-tool interview continuation;
-- VoxRubric trace export.
-
-Browser speech APIs are a zero-key demo transport. Production speech can replace them while preserving Nora's interview and audit semantics.
-
-## Event log and replay
-
-Material actions are recorded as ordered events including:
+Examples:
 
 ```text
 session_created
@@ -315,87 +456,173 @@ session_completed
 
 Replay rejects broken event ordering instead of guessing.
 
-## Counterfactual decision replay
+---
 
-Nora includes a teacher-forced policy comparison layer.
+# 🧪 Counterfactual decision replay
 
-The recorded candidate answers are held fixed while an alternate interview brain can be asked:
+Nora can replay recorded candidate answers through another interview brain.
 
-> Given this same state and same answer, what would you have done next?
+```mermaid
+flowchart LR
+    A[Recorded candidate answer] --> B[Original next decision]
+    A --> C[Alternate Interview Brain]
+    C --> D[Counterfactual next decision]
+    B --> E[Comparison]
+    D --> E
+    E --> F[Follow-up agreement]
+    E --> G[Competency overlap]
+    E --> H[Completion agreement]
+    E --> I[Question similarity]
+```
 
-The report compares:
+This supports:
 
-- follow-up vs advance behavior;
-- completion decisions;
-- competency overlap;
-- question-token overlap.
+- policy regression;
+- model-swap experiments;
+- decision stability analysis.
 
-This is intended for model/policy comparison and stability experiments. It does not claim that a fully branched alternate interview would unfold identically.
+It is **teacher-forced comparison**, not a claim that an entirely branched alternate interview would evolve identically.
 
-## Candidate feedback
+---
 
-Candidate-facing feedback is evidence-based rather than a magic score.
+# 📣 Candidate feedback
+
+Candidate feedback is evidence-oriented rather than reduced to an opaque number.
 
 It separates:
 
-```text
-supported evidence
-needs more evidence
-conflicting evidence
+- ✅ supported evidence;
+- 🟡 needs more evidence;
+- ⚠️ conflicting evidence.
+
+Feedback can link back to interview turns and explicitly states that it is **not a final hiring decision or personality assessment**.
+
+---
+
+# 🔬 Independent Evidence Judge
+
+> 🚧 **Work in progress on main**
+
+The semantic Evidence Judge is being separated from the Interview Brain.
+
+Target flow:
+
+```mermaid
+flowchart TD
+    A[Candidate Answer] --> B[Independent Evidence Judge]
+    B --> C{Literal quote exists?}
+    C -->|No| X[Reject observation + audit failure]
+    C -->|Yes| D[EvidenceObservation]
+    D --> E[Skill Evidence Graph]
 ```
 
-and links statements back to relevant interview turns.
+Design constraints:
 
-The report explicitly states that it is not a final hiring decision or personality assessment.
+- interviewer model and evaluator model are separate roles;
+- judge quotes must exist in the referenced candidate turn;
+- unsupported quotes are rejected;
+- transcript-only evidence cannot silently become `verified`.
 
-## VoxRubric export
+---
 
-Nora exports:
+# 🏗️ Architecture
 
-- ordered turns;
-- question lanes;
-- competency tags;
-- response latency;
-- candidate controls;
-- Skill Evidence Graph;
-- transcript revisions;
-- appeals;
-- integrity signals;
-- tool invocations;
-- tool submissions;
-- tool evaluations;
-- voice audit events;
-- session metadata.
+## High-level system architecture
 
-VoxRubric can then independently test governance, evidence provenance, tool integrity, voice behavior, and interview structure.
+```mermaid
+flowchart TB
+    UI[🖥️ Candidate Interview Room]
+    Voice[🎙️ Voice Transport]
+    API[⚡ FastAPI / WebSocket Layer]
+    Session[🧠 Session Orchestrator]
+    Planner[⚖️ Dual-Lane Planner]
+    Brain[🤖 Interview Brain]
+    Policy[🛡️ Agent Tool Policy]
+    Tools[🛠️ Practical Tool Layer]
+    Sandbox[📦 Coding Sandbox]
+    Evidence[🧾 Skill Evidence Graph]
+    Rights[🧑‍⚖️ Candidate Rights]
+    Integrity[🔐 Integrity Signals]
+    Events[🗂️ Event Log / Replay]
+    Export[📤 VoxRubric Export]
+    Vox[📊 VoxRubric]
 
-## Independent semantic evidence judge
-
-**Work in progress on main.**
-
-The next evaluation layer separates the evidence judge from the interviewer brain.
-
-The intended contract is:
-
-```text
-candidate answer
-      |
-independent evidence judge
-      |
-literal quote validation
-      |
-EvidenceObservation
-      |
-Skill Evidence Graph
+    UI --> API
+    Voice --> API
+    API --> Session
+    Session --> Planner
+    Session --> Brain
+    Brain --> Policy
+    Policy --> Tools
+    Tools --> Sandbox
+    Tools --> Evidence
+    Session --> Evidence
+    Session --> Rights
+    Session --> Integrity
+    Session --> Events
+    Evidence --> Events
+    Rights --> Events
+    Integrity --> Events
+    Events --> Export
+    Export --> Vox
 ```
 
-A transcript-only semantic judge will not be allowed to turn ordinary conversational evidence directly into `verified` skill. Grounded quotes must exist in the referenced candidate turn before the observation can be accepted.
+## Separation of responsibility
 
-## Run locally
+| Component | Owns |
+|---|---|
+| Interview Brain | Proposed next interview action |
+| DualLanePlanner | Anchor/adaptive balance |
+| SessionService | Canonical application state |
+| Tool Policy | Which practical tools may open |
+| Tool Evaluator | Artifact-specific evaluation |
+| Evidence Graph | Job-related evidence provenance |
+| Voice Coordinator | Speech/TTS lifecycle and interruption state |
+| Event Log | Audit history |
+| VoxRubric | External system evaluation |
+
+---
+
+# 🖥️ Built-in interview room
+
+The browser UI currently includes:
+
+- role setup;
+- competency setup;
+- integrity mode;
+- practical-tool policy;
+- Arabic / English locale;
+- WebSocket conversation;
+- browser voice demo;
+- candidate control toolbar;
+- coding/artifact workbench;
+- public test display;
+- artifact submission;
+- tool result display;
+- post-tool continuation;
+- VoxRubric trace export.
+
+> Browser Web Speech is a zero-key development transport.  
+> Production STT/TTS providers can replace it without changing Nora's interview semantics.
+
+---
+
+# 🚀 Quick start
+
+## Requirements
+
+- Python **3.11+**
+- optional Docker for local code execution
+
+## Install
 
 ```bash
+git clone https://github.com/Mahmoud-Shabana/nora-interviewer.git
+cd nora-interviewer
+
 python -m pip install -e '.[dev]'
 pytest
+
 uvicorn nora_interviewer.api:app --reload
 ```
 
@@ -405,13 +632,34 @@ Open:
 http://localhost:8000
 ```
 
-Or:
+## Docker
 
 ```bash
 docker compose up --build
 ```
 
-## Optional coding sandbox
+---
+
+# ⚙️ Configuration
+
+## Interview brain
+
+### Deterministic development mode
+
+```bash
+export NORA_BRAIN_MODE=rule
+```
+
+### OpenAI-compatible provider mode
+
+```bash
+export NORA_BRAIN_MODE=openai-compatible
+export NORA_LLM_BASE_URL=https://your-provider.example/v1
+export NORA_LLM_MODEL=your-model
+export NORA_LLM_API_KEY=...
+```
+
+## Sandbox
 
 Disabled by default:
 
@@ -424,137 +672,244 @@ Local Docker mode:
 ```bash
 export NORA_SANDBOX_MODE=docker
 export NORA_SANDBOX_IMAGE=python:3.12-alpine
-uvicorn nora_interviewer.api:app --reload
 ```
 
-## LLM mode
+---
 
-Default deterministic mode:
+# 🔌 API surface
 
-```bash
-export NORA_BRAIN_MODE=rule
-```
+## Core interview
 
-OpenAI-compatible provider mode:
+| Method | Endpoint |
+|---|---|
+| POST | `/v1/jobs` |
+| POST | `/v1/sessions` |
+| POST | `/v1/sessions/{id}/start` |
+| POST | `/v1/sessions/{id}/responses` |
+| POST | `/v1/sessions/{id}/controls` |
 
-```bash
-export NORA_BRAIN_MODE=openai-compatible
-export NORA_LLM_BASE_URL=https://your-provider.example/v1
-export NORA_LLM_MODEL=your-model
-export NORA_LLM_API_KEY=...
-uvicorn nora_interviewer.api:app --reload
-```
+## Tools
 
-## Core API
+| Method | Endpoint |
+|---|---|
+| POST | `/v1/sessions/{id}/coding-challenges` |
+| POST | `/v1/sessions/{id}/tools` |
+| POST | `/v1/sessions/{id}/tools/{tool_id}/submit` |
+
+## Candidate rights & evidence
+
+| Method | Endpoint |
+|---|---|
+| POST | `/v1/sessions/{id}/corrections` |
+| POST | `/v1/sessions/{id}/appeals` |
+| POST | `/v1/sessions/{id}/evidence` |
+| POST | `/v1/sessions/{id}/integrity-signals` |
+| GET | `/v1/sessions/{id}/feedback` |
+
+## Replay & export
+
+| Method | Endpoint |
+|---|---|
+| GET | `/v1/sessions/{id}` |
+| GET | `/v1/sessions/{id}/events` |
+| GET | `/v1/sessions/{id}/replay` |
+| POST | `/v1/sessions/{id}/decision-replay` |
+| GET | `/v1/sessions/{id}/voxrubric` |
+
+## Voice
+
+| Method | Endpoint |
+|---|---|
+| GET | `/v1/sessions/{id}/voice` |
+| POST | `/v1/sessions/{id}/voice/speech-started` |
+| POST | `/v1/sessions/{id}/voice/transcript-partial` |
+| POST | `/v1/sessions/{id}/voice/transcript-final` |
+| POST | `/v1/sessions/{id}/voice/tts-started` |
+| POST | `/v1/sessions/{id}/voice/tts-completed` |
+| POST | `/v1/sessions/{id}/voice/tts-cancelled` |
+| WS | `/v1/ws/interviews/{id}` |
+
+---
+
+# 🗃️ Project structure
 
 ```text
-POST /v1/jobs
-POST /v1/sessions
-POST /v1/sessions/{id}/start
-POST /v1/sessions/{id}/responses
-POST /v1/sessions/{id}/controls
-
-POST /v1/sessions/{id}/coding-challenges
-POST /v1/sessions/{id}/tools
-POST /v1/sessions/{id}/tools/{tool_id}/submit
-
-POST /v1/sessions/{id}/corrections
-POST /v1/sessions/{id}/appeals
-POST /v1/sessions/{id}/evidence
-POST /v1/sessions/{id}/integrity-signals
-
-GET  /v1/sessions/{id}
-GET  /v1/sessions/{id}/feedback
-GET  /v1/sessions/{id}/events
-GET  /v1/sessions/{id}/replay
-POST /v1/sessions/{id}/decision-replay
-GET  /v1/sessions/{id}/voxrubric
-
-GET  /v1/sessions/{id}/voice
-POST /v1/sessions/{id}/voice/speech-started
-POST /v1/sessions/{id}/voice/transcript-partial
-POST /v1/sessions/{id}/voice/transcript-final
-POST /v1/sessions/{id}/voice/tts-started
-POST /v1/sessions/{id}/voice/tts-completed
-POST /v1/sessions/{id}/voice/tts-cancelled
-
-WS   /v1/ws/interviews/{id}
+nora-interviewer/
+├── src/nora_interviewer/
+│   ├── api.py                 # FastAPI + WebSocket transport
+│   ├── service.py             # Interview orchestration
+│   ├── models.py              # Domain contracts
+│   ├── planner.py             # Dual-lane planner
+│   ├── evidence.py            # Skill Evidence Graph logic
+│   ├── feedback.py            # Candidate feedback
+│   ├── controls.py            # Candidate controls
+│   ├── replay.py              # Event replay
+│   ├── counterfactual.py      # Decision replay experiments
+│   ├── voice.py               # Realtime voice coordinator
+│   ├── tools.py               # Tool registry
+│   ├── tool_templates.py      # Trusted tool templates
+│   ├── coding.py              # Coding challenge manager/evaluator
+│   ├── sandbox.py             # Code execution boundary
+│   ├── providers/             # Interview brain/provider adapters
+│   └── web/                   # Built-in interview room
+├── tests/
+├── docs/
+├── Dockerfile
+├── compose.yaml
+└── pyproject.toml
 ```
 
-## Architecture
+---
 
-```text
-Candidate UI / Voice / Practical tools
-                  |
-                  v
-          Interview transport
-                  |
-        +---------+----------+
-        |                    |
-        v                    v
-RealtimeVoice          Session Orchestrator
-Coordinator                   |
-                         +-----+------+
-                         |            |
-                  DualLanePlanner  InterviewBrain
-                         |            |
-                         +-----+------+
-                               |
-                      Agent Tool Policy
-                               |
-                +--------------+---------------+
-                |              |               |
-              Coding        Case/Docs       Whiteboard
-             Sandbox
-                |
-                v
-         Practical Artifact
-                |
-                v
-        Skill Evidence Graph
-                |
-        +-------+---------+
-        |                 |
-Candidate Rights      Integrity Signals
-        |                 |
-        +-------+---------+
-                |
-          Event Log / Replay
-                |
-                v
-          VoxRubric Export
+# 🔗 Nora + VoxRubric
+
+```mermaid
+flowchart LR
+    N[Nora Session] --> T[VoxRubric Trace]
+    T --> M[Deterministic Metrics]
+    T --> G[Governance Checks]
+    T --> V[Voice Metrics]
+    T --> A[Tool Integrity]
+    T --> R[Arena / Regression]
 ```
 
-## Documentation
+Nora produces the interview.
 
-- `docs/ARCHITECTURE.md`
-- `docs/INTERVIEW_PROTOCOL.md`
-- `docs/CANDIDATE_RIGHTS.md`
-- `docs/VOICE_PROTOCOL.md`
+[VoxRubric](https://github.com/Mahmoud-Shabana/voxrubric) evaluates the system behavior independently.
 
-## Safety baseline
+---
 
-Nora should not score facial appearance, attractiveness, accent prestige, inferred emotion, race, religion, nationality, disability, age, gender, health, or similar protected/sensitive traits.
+# 🔐 Security & governance
 
-Video may be used for presence, recording, screen sharing, diagrams, or other interaction artifacts. Job-relevant evaluation should remain tied to explicit competencies, evidence, practical work, applicable law, and accountable review.
+Nora is intentionally conservative around high-stakes behavior.
 
-## Development direction
+### Nora should not score
 
-Next major layers:
+- facial appearance;
+- attractiveness;
+- accent prestige;
+- inferred emotion;
+- race;
+- religion;
+- nationality;
+- disability;
+- age;
+- gender;
+- health;
+- other protected/sensitive traits.
 
-- independent semantic Evidence Judge;
-- real streaming STT/TTS provider adapters;
-- VAD and audio-chunk transport;
-- reconnect/backpressure handling;
-- recruiter/candidate role separation and authorization;
-- durable PostgreSQL persistence;
-- encrypted artifact/audio storage;
-- retention controls;
-- richer practical-tool evaluators;
-- Nora adapter for VoxRubric Arena;
-- Arabic dialect/technical-ASR benchmark packs;
-- statistical repeated-run evaluation.
+### Production deployments should add
 
-## License
+- authentication and role-based authorization;
+- durable database persistence;
+- encryption at rest;
+- secure artifact/audio storage;
+- retention/deletion policy;
+- secret management;
+- rate limiting;
+- audit access controls;
+- jurisdiction-specific legal review;
+- dedicated hostile-code sandbox infrastructure.
+
+---
+
+# 📚 Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Interview Protocol](docs/INTERVIEW_PROTOCOL.md)
+- [Candidate Rights](docs/CANDIDATE_RIGHTS.md)
+- [Realtime Voice Protocol](docs/VOICE_PROTOCOL.md)
+- [VoxRubric](https://github.com/Mahmoud-Shabana/voxrubric)
+
+---
+
+# 🗺️ Roadmap
+
+## ✅ Implemented
+
+- [x] Dual-lane anchor/adaptive interviews
+- [x] Structured Interview Brain
+- [x] Candidate controls
+- [x] Skill Evidence Graph
+- [x] Transcript corrections
+- [x] Candidate appeals
+- [x] Progressive integrity modes
+- [x] Append-only event log
+- [x] Replay
+- [x] Candidate feedback
+- [x] Practical tool framework
+- [x] Trusted tool templates
+- [x] Coding sandbox boundary
+- [x] Hidden-test separation
+- [x] Post-tool reasoning
+- [x] Counterfactual decision replay
+- [x] Realtime voice state machine
+- [x] Partial/final transcript lifecycle
+- [x] TTS lifecycle
+- [x] Barge-in recovery model
+- [x] Voice latency instrumentation
+- [x] VoxRubric export
+
+## 🚧 In progress
+
+- [ ] Independent semantic Evidence Judge
+- [ ] Strict quote-grounded semantic observations
+
+## 🧭 Next
+
+- [ ] Production streaming STT adapter
+- [ ] Production streaming TTS adapter
+- [ ] VAD and audio chunk transport
+- [ ] Reconnect / backpressure handling
+- [ ] Recruiter / candidate authorization
+- [ ] PostgreSQL persistence
+- [ ] encrypted object storage
+- [ ] retention controls
+- [ ] external sandbox service
+- [ ] richer domain-specific practical evaluators
+- [ ] Nora adapter for VoxRubric Arena
+- [ ] Arabic dialect and technical-ASR benchmarks
+
+---
+
+# 🤝 Contributing
+
+Nora is currently an alpha-stage research and engineering project.
+
+Good contribution areas include:
+
+- interview orchestration;
+- voice agents;
+- LLM evaluation;
+- practical assessment tooling;
+- event sourcing;
+- sandboxing;
+- Arabic/English speech systems;
+- governance and auditability.
+
+Before adding an automatic hiring signal, ask:
+
+> Can this be tied to job-related evidence and reviewed by a human?
+
+---
+
+# ⚠️ Disclaimer
+
+Nora is research and infrastructure software.
+
+It should not be deployed as an autonomous hiring authority without appropriate technical validation, human oversight, consent, security controls, and legal review for the relevant jurisdiction.
+
+---
+
+# 📄 License
 
 Apache-2.0.
+
+See [LICENSE](LICENSE).
+
+---
+
+<p align="center">
+  <strong>Nora Interviewer</strong><br>
+  Auditable interviews. Evidence before scores.
+</p>
