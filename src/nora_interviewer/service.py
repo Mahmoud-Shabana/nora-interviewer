@@ -9,6 +9,12 @@ from .coding import CodingChallengeManager, CodingChallengeRequest, CodingInterv
 from .controls import handle_candidate_control
 from .counterfactual import CounterfactualReplayReport, CounterfactualReplayer
 from .evidence import EvidenceGraph
+from .evidence_judge import (
+    DisabledEvidenceJudge,
+    EvidenceJudge,
+    EvidenceJudgeError,
+    GroundedEvidenceGate,
+)
 from .feedback import CandidateFeedbackReport, build_candidate_feedback
 from .models import (
     CandidateAppeal,
@@ -56,11 +62,13 @@ class InterviewService:
         brain: InterviewBrain,
         planner: DualLanePlanner | None = None,
         tool_registry: ToolRegistry | None = None,
+        evidence_judge: EvidenceJudge | None = None,
     ) -> None:
         self.store = store
         self.brain = brain
         self.planner = planner or DualLanePlanner()
         self.tool_registry = tool_registry or default_tool_registry()
+        self.evidence_judge = evidence_judge or DisabledEvidenceJudge()
         self.coding_challenges = CodingChallengeManager()
         self.tool_registry.register(
             CodingInterviewTool(
@@ -195,6 +203,13 @@ class InterviewService:
                     },
                 )
 
+            await self._judge_candidate_evidence(
+                session=session,
+                job=job,
+                question=previous_question,
+                answer=candidate,
+            )
+
         started = perf_counter()
         adaptive_decision = await self.brain.after_answer(session, job)
         latency_ms = max(0, round((perf_counter() - started) * 1000))
@@ -229,6 +244,71 @@ class InterviewService:
             interviewer_turn=interviewer,
             tool_invocation=tool_invocation,
         )
+
+    async def _judge_candidate_evidence(
+        self,
+        *,
+        session: InterviewSession,
+        job: JobSpec,
+        question: Turn,
+        answer: Turn,
+    ) -> None:
+        if self.evidence_judge.judge_id == "disabled":
+            return
+
+        competency_ids = list(dict.fromkeys(question.competency_tags))
+        if not competency_ids:
+            return
+
+        try:
+            response = await self.evidence_judge.evaluate(
+                question=question,
+                answer=answer,
+                job=job,
+                competency_ids=competency_ids,
+            )
+            observations = GroundedEvidenceGate.validate(
+                answer=answer,
+                response=response,
+                judge_id=self.evidence_judge.judge_id,
+            )
+            for observation in observations:
+                item = EvidenceGraph.apply_observation(
+                    session,
+                    job,
+                    observation,
+                )
+                append_event(
+                    session,
+                    EventType.EVIDENCE_OBSERVED,
+                    turn=answer,
+                    payload={
+                        "evidence_id": item.id,
+                        "competency_id": observation.competency_id,
+                        "state": observation.state.value,
+                        "confidence": observation.confidence,
+                        "quote": observation.quote,
+                        "source": observation.source,
+                    },
+                )
+        except (
+            EvidenceJudgeError,
+            ValueError,
+            TypeError,
+        ) as exc:
+            append_event(
+                session,
+                EventType.EVIDENCE_JUDGE_FAILED,
+                turn=answer,
+                payload={
+                    "judge_id": self.evidence_judge.judge_id,
+                    "question_turn_id": question.id,
+                    "answer_turn_id": answer.id,
+                    "competency_ids": competency_ids,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc)[:1000],
+                },
+            )
 
     async def candidate_control(
         self,
