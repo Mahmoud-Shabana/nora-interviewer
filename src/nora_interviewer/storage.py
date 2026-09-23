@@ -4,6 +4,7 @@ import asyncio
 from typing import Protocol
 
 from .models import InterviewSession, JobSpec
+from .rubric_drafting import RubricDraft
 
 
 class StoreConflictError(RuntimeError):
@@ -19,6 +20,23 @@ class Store(Protocol):
         self,
         job_id: str,
     ) -> JobSpec | None: ...
+
+    async def put_rubric_draft(
+        self,
+        draft: RubricDraft,
+    ) -> None: ...
+
+    async def get_rubric_draft(
+        self,
+        draft_id: str,
+    ) -> RubricDraft | None: ...
+
+    async def approve_rubric_draft(
+        self,
+        draft_id: str,
+        approved_draft: RubricDraft,
+        job: JobSpec,
+    ) -> None: ...
 
     async def put_session(
         self,
@@ -49,6 +67,7 @@ class InMemoryStore:
 
     def __init__(self) -> None:
         self.jobs: dict[str, JobSpec] = {}
+        self.rubric_drafts: dict[str, RubricDraft] = {}
         self.sessions: dict[str, InterviewSession] = {}
         self._lock = asyncio.Lock()
 
@@ -59,6 +78,67 @@ class InMemoryStore:
     async def get_job(self, job_id: str) -> JobSpec | None:
         job = self.jobs.get(job_id)
         return job.model_copy(deep=True) if job else None
+
+    async def put_rubric_draft(
+        self,
+        draft: RubricDraft,
+    ) -> None:
+        async with self._lock:
+            if draft.id in self.rubric_drafts:
+                raise StoreConflictError(
+                    f"rubric draft {draft.id} already exists"
+                )
+            self.rubric_drafts[draft.id] = (
+                draft.model_copy(deep=True)
+            )
+
+    async def get_rubric_draft(
+        self,
+        draft_id: str,
+    ) -> RubricDraft | None:
+        draft = self.rubric_drafts.get(
+            draft_id
+        )
+        return (
+            draft.model_copy(deep=True)
+            if draft
+            else None
+        )
+
+    async def approve_rubric_draft(
+        self,
+        draft_id: str,
+        approved_draft: RubricDraft,
+        job: JobSpec,
+    ) -> None:
+        async with self._lock:
+            current = self.rubric_drafts.get(
+                draft_id
+            )
+            if current is None:
+                raise KeyError(
+                    f"rubric draft {draft_id} not found"
+                )
+            if (
+                current.activation_status
+                != "draft_only"
+            ):
+                raise StoreConflictError(
+                    f"rubric draft {draft_id} is already approved"
+                )
+            if job.id in self.jobs:
+                raise StoreConflictError(
+                    f"job {job.id} already exists"
+                )
+
+            self.jobs[job.id] = (
+                job.model_copy(deep=True)
+            )
+            self.rubric_drafts[draft_id] = (
+                approved_draft.model_copy(
+                    deep=True
+                )
+            )
 
     async def put_session(
         self,
