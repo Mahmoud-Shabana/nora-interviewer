@@ -1,3 +1,4 @@
+import asyncio
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -16,6 +17,7 @@ class FakeOutputBridge:
     def __init__(self):
         self.open_calls = []
         self.closed = []
+        self.block = False
 
     async def open(
         self,
@@ -42,6 +44,9 @@ class FakeOutputBridge:
         )
 
     async def chunks(self, *, stream_id):
+        if self.block:
+            await asyncio.sleep(3600)
+            return
         yield TtsAudioChunk(
             sequence=0,
             generation=0,
@@ -164,11 +169,7 @@ def test_tts_websocket_supports_client_cancel(monkeypatch):
         fake,
     )
 
-    async def no_chunks(*, stream_id):
-        if False:
-            yield None
-
-    fake.chunks = no_chunks
+    fake.block = True
 
     client = TestClient(api.app)
     suffix = uuid4().hex[:8]
