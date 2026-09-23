@@ -35,6 +35,8 @@ class Permission(str, Enum):
     USE_VOICE = "use_voice"
     RUN_RETENTION = "run_retention"
     READ_SYSTEM = "read_system"
+    READ_REVIEW_QUEUE = "read_review_queue"
+    READ_RECRUITER_REPORT = "read_recruiter_report"
 
 
 class Principal(StrictModel):
@@ -68,6 +70,8 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.RUN_DECISION_REPLAY,
         Permission.EXPORT_TRACE,
         Permission.READ_SYSTEM,
+        Permission.READ_REVIEW_QUEUE,
+        Permission.READ_RECRUITER_REPORT,
     },
     ActorRole.REVIEWER: {
         Permission.READ_SESSION,
@@ -78,6 +82,8 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.WRITE_INTEGRITY,
         Permission.EXPORT_TRACE,
         Permission.READ_SYSTEM,
+        Permission.READ_REVIEW_QUEUE,
+        Permission.READ_RECRUITER_REPORT,
     },
     ActorRole.SERVICE: set(Permission),
 }
