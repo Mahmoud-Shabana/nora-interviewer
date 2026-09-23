@@ -256,8 +256,9 @@ class VoiceStreamBridge:
                     error_type=type(exc).__name__,
                     message=str(exc),
                 )
-            finally:
-                raise
+            except Exception:
+                pass
+            raise
         finally:
             self.manager.acknowledge_processed(
                 stream_id,
