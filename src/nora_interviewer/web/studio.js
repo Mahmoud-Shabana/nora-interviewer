@@ -1,1 +1,189 @@
-const $ = (id) => document.getElementById(id);\n\nconst state = {\n  draft: null,\n};\n\nasync function jsonFetch(url, options = {}) {\n  const response = await fetch(url, {\n    headers: {\n      "Content-Type": "application/json",\n      ...(options.headers || {}),\n    },\n    ...options,\n  });\n  const payload = await response.json().catch(() => ({}));\n  if (!response.ok) {\n    const detail = typeof payload.detail === "string"\n      ? payload.detail\n      : JSON.stringify(payload.detail || payload);\n    throw new Error(detail || `HTTP ${response.status}`);\n  }\n  return payload;\n}\n\nfunction setStatus(id, message, kind = "") {\n  const node = $(id);\n  node.textContent = message;\n  node.className = `status ${kind}`.trim();\n}\n\nfunction field(labelText, value, kind, index, options = {}) {\n  const label = document.createElement("label");\n  label.textContent = labelText;\n  const input = kind === "textarea"\n    ? document.createElement("textarea")\n    : document.createElement("input");\n  input.value = value ?? "";\n  input.dataset.index = String(index);\n  input.dataset.field = options.field || "";\n  if (kind === "textarea") input.rows = options.rows || 3;\n  if (kind === "number") {\n    input.type = "number";\n    input.step = options.step || "0.1";\n    if (options.min != null) input.min = String(options.min);\n    if (options.max != null) input.max = String(options.max);\n  }\n  label.appendChild(input);\n  return label;\n}\n\nfunction renderDraft(draft) {\n  state.draft = draft;\n  $("emptyDraft").classList.add("hidden");\n  $("draftEditor").classList.remove("hidden");\n  $("draftBadge").textContent = `${draft.activation_status} · ${draft.drafter_id}`;\n  $("draftBadge").classList.add("active");\n  $("approvalCheck").checked = false;\n  $("createJobButton").disabled = true;\n  setStatus("createStatus", "");\n\n  const warnings = $("warnings");\n  warnings.replaceChildren();\n  for (const warning of draft.warnings || []) {\n    const item = document.createElement("div");\n    item.className = "warning";\n    item.textContent = warning;\n    warnings.appendChild(item);\n  }\n\n  const editor = $("competencyEditor");\n  editor.replaceChildren();\n  draft.competencies.forEach((item, index) => {\n    const card = document.createElement("article");\n    card.className = "competency-card";\n\n    const head = document.createElement("div");\n    head.className = "competency-card-head";\n    const title = document.createElement("strong");\n    title.textContent = item.id;\n    const number = document.createElement("span");\n    number.className = "competency-index";\n    number.textContent = `COMPETENCY ${index + 1}`;\n    head.append(title, number);\n    card.appendChild(head);\n\n    card.appendChild(field("Competency ID", item.id, "text", index, {field: "id"}));\n    card.appendChild(field("Description", item.description, "textarea", index, {field: "description", rows: 3}));\n    card.appendChild(field("Weight", item.weight, "number", index, {field: "weight", min: 0.1, max: 10, step: 0.1}));\n    card.appendChild(field("Standardized anchor question", item.anchor_question, "textarea", index, {field: "anchor_question", rows: 4}));\n\n    const evidence = document.createElement("div");\n    evidence.className = "evidence-list";\n    for (const signal of item.observable_evidence || []) {\n      const chip = document.createElement("span");\n      chip.textContent = signal;\n      evidence.appendChild(chip);\n    }\n    card.appendChild(evidence);\n\n    const rationale = document.createElement("div");\n    rationale.className = "rationale";\n    rationale.textContent = `Draft rationale: ${item.rationale}`;\n    card.appendChild(rationale);\n\n    editor.appendChild(card);\n  });\n}\n\nfunction editedCompetencies() {\n  if (!state.draft) return [];\n  return state.draft.competencies.map((original, index) => {\n    const query = (name) => document.querySelector(`[data-index="${index}"][data-field="${name}"]`);\n    return {\n      id: query("id").value.trim(),\n      description: query("description").value.trim(),\n      weight: Number(query("weight").value),\n      anchor_question: query("anchor_question").value.trim(),\n    };\n  });\n}\n\n$("draftForm").addEventListener("submit", async (event) => {\n  event.preventDefault();\n  const button = $("draftButton");\n  button.disabled = true;\n  setStatus("draftStatus", "Drafting job-related competencies…");\n\n  try {\n    const request = {\n      title: $("jobTitle").value.trim(),\n      job_description: $("jobDescription").value.trim(),\n      locale: $("locale").value,\n      competency_count: Number($("competencyCount").value),\n      max_questions: Number($("maxQuestions").value),\n      anchor_ratio: Number($("anchorRatio").value),\n      recruiter_notes: $("recruiterNotes").value.trim() || null,\n    };\n    const draft = await jsonFetch("/v1/rubrics/draft", {\n      method: "POST",\n      body: JSON.stringify(request),\n    });\n    renderDraft(draft);\n    setStatus(\n      "draftStatus",\n      "Draft generated. Review every competency before creating the job.",\n      "success",\n    );\n  } catch (error) {\n    setStatus("draftStatus", error.message, "error");\n  } finally {\n    button.disabled = false;\n  }\n});\n\n$("approvalCheck").addEventListener("change", (event) => {\n  $("createJobButton").disabled = !event.target.checked;\n});\n\n$("createJobButton").addEventListener("click", async () => {\n  if (!state.draft || !$("approvalCheck").checked) return;\n\n  const competencies = editedCompetencies();\n  const ids = competencies.map((item) => item.id);\n  if (new Set(ids).size !== ids.length) {\n    setStatus("createStatus", "Competency IDs must be unique.", "error");\n    return;\n  }\n\n  const button = $("createJobButton");\n  button.disabled = true;\n  setStatus("createStatus", "Creating reviewed job…");\n\n  try {\n    const job = await jsonFetch("/v1/jobs", {\n      method: "POST",\n      body: JSON.stringify({\n        title: $("jobTitle").value.trim(),\n        description: $("jobDescription").value.trim(),\n        competencies,\n        max_questions: Number($("maxQuestions").value),\n        anchor_ratio: Number($("anchorRatio").value),\n        tool_templates: [],\n        max_tools: 2,\n      }),\n    });\n    setStatus(\n      "createStatus",\n      `Reviewed job created: ${job.id}`,\n      "success",\n    );\n    $("draftBadge").textContent = "reviewed · job created";\n  } catch (error) {\n    setStatus("createStatus", error.message, "error");\n    button.disabled = false;\n  }\n});
+const $ = (id) => document.getElementById(id);
+
+const state = {
+  draft: null,
+};
+
+async function jsonFetch(url, options = {}) {
+  const response = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = typeof payload.detail === "string"
+      ? payload.detail
+      : JSON.stringify(payload.detail || payload);
+    throw new Error(detail || `HTTP ${response.status}`);
+  }
+  return payload;
+}
+
+function setStatus(id, message, kind = "") {
+  const node = $(id);
+  node.textContent = message;
+  node.className = `status ${kind}`.trim();
+}
+
+function field(labelText, value, kind, index, options = {}) {
+  const label = document.createElement("label");
+  label.textContent = labelText;
+  const input = kind === "textarea"
+    ? document.createElement("textarea")
+    : document.createElement("input");
+  input.value = value ?? "";
+  input.dataset.index = String(index);
+  input.dataset.field = options.field || "";
+  if (kind === "textarea") input.rows = options.rows || 3;
+  if (kind === "number") {
+    input.type = "number";
+    input.step = options.step || "0.1";
+    if (options.min != null) input.min = String(options.min);
+    if (options.max != null) input.max = String(options.max);
+  }
+  label.appendChild(input);
+  return label;
+}
+
+function renderDraft(draft) {
+  state.draft = draft;
+  $("emptyDraft").classList.add("hidden");
+  $("draftEditor").classList.remove("hidden");
+  $("draftBadge").textContent = `${draft.activation_status} · ${draft.drafter_id}`;
+  $("draftBadge").classList.add("active");
+  $("approvalCheck").checked = false;
+  $("approvalNote").value = "";
+  $("createJobButton").disabled = true;
+  setStatus("createStatus", "");
+
+  const warnings = $("warnings");
+  warnings.replaceChildren();
+  for (const warning of draft.warnings || []) {
+    const item = document.createElement("div");
+    item.className = "warning";
+    item.textContent = warning;
+    warnings.appendChild(item);
+  }
+
+  const editor = $("competencyEditor");
+  editor.replaceChildren();
+  draft.competencies.forEach((item, index) => {
+    const card = document.createElement("article");
+    card.className = "competency-card";
+
+    const head = document.createElement("div");
+    head.className = "competency-card-head";
+    const title = document.createElement("strong");
+    title.textContent = item.id;
+    const number = document.createElement("span");
+    number.className = "competency-index";
+    number.textContent = `COMPETENCY ${index + 1}`;
+    head.append(title, number);
+    card.appendChild(head);
+
+    card.appendChild(field("Competency ID", item.id, "text", index, {field: "id"}));
+    card.appendChild(field("Description", item.description, "textarea", index, {field: "description", rows: 3}));
+    card.appendChild(field("Weight", item.weight, "number", index, {field: "weight", min: 0.1, max: 10, step: 0.1}));
+    card.appendChild(field("Standardized anchor question", item.anchor_question, "textarea", index, {field: "anchor_question", rows: 4}));
+
+    const evidence = document.createElement("div");
+    evidence.className = "evidence-list";
+    for (const signal of item.observable_evidence || []) {
+      const chip = document.createElement("span");
+      chip.textContent = signal;
+      evidence.appendChild(chip);
+    }
+    card.appendChild(evidence);
+
+    const rationale = document.createElement("div");
+    rationale.className = "rationale";
+    rationale.textContent = `Draft rationale: ${item.rationale}`;
+    card.appendChild(rationale);
+    editor.appendChild(card);
+  });
+}
+
+function editedCompetencies() {
+  if (!state.draft) return [];
+  return state.draft.competencies.map((original, index) => {
+    const query = (name) => document.querySelector(`[data-index="${index}"][data-field="${name}"]`);
+    return {
+      id: query("id").value.trim(),
+      description: query("description").value.trim(),
+      weight: Number(query("weight").value),
+      anchor_question: query("anchor_question").value.trim(),
+    };
+  });
+}
+
+$("draftForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = $("draftButton");
+  button.disabled = true;
+  setStatus("draftStatus", "Drafting job-related competencies…");
+  try {
+    const request = {
+      title: $("jobTitle").value.trim(),
+      job_description: $("jobDescription").value.trim(),
+      locale: $("locale").value,
+      competency_count: Number($("competencyCount").value),
+      max_questions: Number($("maxQuestions").value),
+      anchor_ratio: Number($("anchorRatio").value),
+      recruiter_notes: $("recruiterNotes").value.trim() || null,
+    };
+    const draft = await jsonFetch("/v1/rubrics/draft", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    renderDraft(draft);
+    setStatus("draftStatus", "Draft saved. Review every competency before approval.", "success");
+  } catch (error) {
+    setStatus("draftStatus", error.message, "error");
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("approvalCheck").addEventListener("change", (event) => {
+  $("createJobButton").disabled = !event.target.checked;
+});
+
+$("createJobButton").addEventListener("click", async () => {
+  if (!state.draft || !$("approvalCheck").checked) return;
+  const competencies = editedCompetencies();
+  const ids = competencies.map((item) => item.id);
+  if (new Set(ids).size !== ids.length) {
+    setStatus("createStatus", "Competency IDs must be unique.", "error");
+    return;
+  }
+
+  const button = $("createJobButton");
+  button.disabled = true;
+  setStatus("createStatus", "Approving rubric and creating job…");
+  try {
+    const result = await jsonFetch(`/v1/rubrics/drafts/${state.draft.id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: $("jobTitle").value.trim(),
+        description: $("jobDescription").value.trim(),
+        competencies,
+        max_questions: Number($("maxQuestions").value),
+        anchor_ratio: Number($("anchorRatio").value),
+        tool_templates: [],
+        max_tools: 2,
+        review_note: $("approvalNote").value.trim() || null,
+      }),
+    });
+    state.draft = result.draft;
+    setStatus("createStatus", `Reviewed job created: ${result.job.id}`, "success");
+    $("draftBadge").textContent = `approved · ${result.job.id}`;
+    $("approvalCheck").disabled = true;
+    $("approvalNote").disabled = true;
+  } catch (error) {
+    setStatus("createStatus", error.message, "error");
+    button.disabled = false;
+  }
+});
