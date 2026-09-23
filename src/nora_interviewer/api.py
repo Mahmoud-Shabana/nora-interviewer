@@ -16,6 +16,7 @@ from .config import (
     build_brain,
     build_evidence_judge,
     build_principal_resolver,
+    build_rubric_drafter,
     build_store,
     build_streaming_speech_provider,
     build_streaming_tts_provider,
@@ -62,6 +63,11 @@ from .review_service import ReviewService
 from .providers.streaming_speech import StreamingSpeechUnavailableError
 from .providers.streaming_tts import StreamingTtsUnavailableError
 from .retention import RetentionManager, RetentionReport, RetentionRequest
+from .rubric_drafting import (
+    RubricDraft,
+    RubricDraftError,
+    RubricDraftRequest,
+)
 from .service import InterviewService
 from .voice import (
     RealtimeVoiceCoordinator,
@@ -106,6 +112,7 @@ service = InterviewService(
 )
 voice = RealtimeVoiceCoordinator(service=service, store=store)
 principal_resolver = build_principal_resolver()
+rubric_drafter = build_rubric_drafter()
 retention = RetentionManager(store)
 review_service = ReviewService(store=store)
 streaming_speech_provider = build_streaming_speech_provider()
@@ -254,7 +261,31 @@ async def system_capabilities(
         service=service,
         streaming_speech_provider=streaming_speech_provider,
         streaming_tts_provider=streaming_tts_provider,
+        rubric_drafter=rubric_drafter,
     )
+
+
+@app.post(
+    "/v1/rubrics/draft",
+    response_model=RubricDraft,
+)
+async def draft_rubric(
+    request: RubricDraftRequest,
+    principal: Principal = Depends(current_principal),
+) -> RubricDraft:
+    require_global_permission(
+        principal,
+        Permission.DRAFT_RUBRIC,
+    )
+    try:
+        return await rubric_drafter.draft(
+            request
+        )
+    except RubricDraftError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
 
 
 @app.post(
