@@ -17,6 +17,7 @@ from .counterfactual import CounterfactualReplayReport
 from .feedback import CandidateFeedbackReport
 from .models import (
     AppealReviewRequest,
+    AppealReviewSubmission,
     CandidateAppeal,
     CandidateAppealRequest,
     CandidateControlRequest,
@@ -366,7 +367,7 @@ async def submit_appeal(
 async def review_appeal(
     session_id: str,
     appeal_id: str,
-    request: AppealReviewRequest,
+    request: AppealReviewSubmission,
     principal: Principal = Depends(current_principal),
 ) -> CandidateAppeal:
     await require_session_permission(
