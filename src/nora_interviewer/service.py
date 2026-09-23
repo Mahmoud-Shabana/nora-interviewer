@@ -5,6 +5,7 @@ from time import perf_counter
 from fastapi import HTTPException
 
 from .audit import append_event
+from .coding import CodingChallengeManager, CodingChallengeRequest, CodingInterviewTool
 from .controls import handle_candidate_control
 from .evidence import EvidenceGraph
 from .feedback import CandidateFeedbackReport, build_candidate_feedback
@@ -39,6 +40,7 @@ from .models import (
 from .planner import DualLanePlanner
 from .providers.base import InterviewBrain
 from .replay import ReplayState, replay_events
+from .sandbox import default_sandbox_runner
 from .storage import InMemoryStore
 from .tools import ToolRegistry, default_tool_registry
 
@@ -55,6 +57,13 @@ class InterviewService:
         self.brain = brain
         self.planner = planner or DualLanePlanner()
         self.tool_registry = tool_registry or default_tool_registry()
+        self.coding_challenges = CodingChallengeManager()
+        self.tool_registry.register(
+            CodingInterviewTool(
+                challenges=self.coding_challenges,
+                runner=default_sandbox_runner(),
+            )
+        )
 
     async def create_job(self, job: JobSpec) -> JobSpec:
         await self.store.put_job(job)
@@ -238,6 +247,25 @@ class InterviewService:
 
         await self.store.put_session(session)
         return result
+
+    async def open_coding_challenge(
+        self,
+        session_id: str,
+        request: CodingChallengeRequest,
+    ) -> ToolInvocation:
+        session, job = await self._get(session_id)
+        known_competencies = {competency.id for competency in job.competencies}
+        unknown = [tag for tag in request.competency_tags if tag not in known_competencies]
+        if unknown:
+            raise HTTPException(400, f"Coding challenge references unknown competencies: {unknown}")
+
+        if request.opened_from_turn_id:
+            known_turns = {turn.id for turn in session.turns}
+            if request.opened_from_turn_id not in known_turns:
+                raise HTTPException(400, "Coding challenge references unknown opening turn")
+
+        invocation = self.coding_challenges.create(request)
+        return await self.open_tool(session_id, invocation)
 
     async def open_tool(
         self,
