@@ -5,7 +5,7 @@ from time import perf_counter
 
 from fastapi import HTTPException
 
-from .audit import append_event
+from .audit import append_event, verify_event_chain
 from .coding import CodingChallengeManager, CodingChallengeRequest, CodingInterviewTool
 from .controls import handle_candidate_control
 from .counterfactual import CounterfactualReplayReport, CounterfactualReplayer
@@ -805,6 +805,13 @@ class InterviewService:
             for event in session.events
             if event.type is EventType.EVIDENCE_JUDGE_FAILED
         ]
+        audit_head_hash = verify_event_chain(
+            session.events
+        )
+        audit_events = [
+            event.model_dump(mode="json")
+            for event in session.events
+        ]
         return VoxRubricTrace(
             session_id=session.id,
             role=job.title,
@@ -821,6 +828,21 @@ class InterviewService:
                 "candidate_controls": candidate_controls,
                 "voice_events": voice_events,
                 "evidence_judge_failures": evidence_judge_failures,
+                "audit_chain": {
+                    "verified": (
+                        True
+                        if audit_head_hash is not None
+                        else None
+                    ),
+                    "head_hash": audit_head_hash,
+                    "event_count": len(session.events),
+                    "hash_version": (
+                        1
+                        if audit_head_hash is not None
+                        else None
+                    ),
+                },
+                "audit_events": audit_events,
                 "evidence_graph": {
                     key: value.model_dump(mode="json")
                     for key, value in session.evidence_graph.items()
