@@ -51,6 +51,7 @@ from .models import (
 )
 from .replay import ReplayState
 from .review import (
+    EvidenceReevaluationQueueItem,
     RecruiterSessionReport,
     ReviewDashboardSummary,
     ReviewQueueItem,
@@ -265,6 +266,23 @@ async def review_summary(
         Permission.READ_REVIEW_QUEUE,
     )
     return await review_service.summary()
+
+
+@app.get(
+    "/v1/review/evidence-reevaluation",
+    response_model=list[EvidenceReevaluationQueueItem],
+)
+async def evidence_reevaluation_queue(
+    job_id: str | None = None,
+    principal: Principal = Depends(current_principal),
+) -> list[EvidenceReevaluationQueueItem]:
+    require_global_permission(
+        principal,
+        Permission.READ_REVIEW_QUEUE,
+    )
+    return await review_service.evidence_reevaluation_queue(
+        job_id=job_id,
+    )
 
 
 @app.get(
