@@ -23,6 +23,7 @@ const state = {
   recognitionFinalSent: false,
   voiceTransport: null,
   serverTtsPlayer: null,
+  serverSttClient: null,
   lastSpokenTurn: null,
 };
 
@@ -66,6 +67,134 @@ function browserSpeechRecognition() {
 function sendVoiceEvent(type, data = {}) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
   state.ws.send(JSON.stringify({type, data}));
+}
+
+function stopPlaybackForBargeIn() {
+  if (!state.activeTtsTurnId) return;
+  state.bargeInPending = true;
+  state.serverTtsPlayer?.stopLocalPlayback();
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+function serverSttAvailable() {
+  const configured = Boolean(
+    state.voiceTransport?.streaming_stt_enabled
+  );
+  return Boolean(
+    state.voiceTransport?.streaming_stt_available
+    ?? configured
+  );
+}
+
+function handleServerSttFinal(data) {
+  const finalText = (data?.text || "").trim();
+  if (finalText) {
+    addMessage(
+      "candidate",
+      finalText,
+      "Candidate · SERVER VOICE",
+    );
+  }
+  $("answerBox").value = "";
+  setThinking(false);
+
+  const turn = data?.interviewer_turn;
+  if (turn) {
+    const lane = turn.metadata?.question_lane
+      ? turn.metadata.question_lane.toUpperCase()
+      : "NORA";
+    const tags = turn.competency_tags?.join(" · ");
+    addMessage(
+      "nora",
+      turn.text,
+      [lane, tags].filter(Boolean).join(" · "),
+    );
+    speak(turn);
+    updateProgress(turn);
+  }
+
+  if (data?.tool_invocation) {
+    openToolWorkspace(data.tool_invocation);
+  }
+
+  if (data?.completed) {
+    setConnection("Interview complete");
+    $("answerBox").disabled = true;
+    document.querySelector(".send").disabled = true;
+    $("micBtn").disabled = true;
+    return;
+  }
+
+  $("answerBox").focus();
+}
+
+function ensureServerSttClient() {
+  if (
+    !serverSttAvailable()
+    || !window.NoraServerSttClient
+    || !state.session
+  ) {
+    return null;
+  }
+  if (state.serverSttClient) {
+    return state.serverSttClient;
+  }
+
+  state.serverSttClient = new window.NoraServerSttClient({
+    sessionId: state.session.id,
+    locale: (
+      state.session.locale?.startsWith("ar")
+      ? "ar-SA"
+      : "en-US"
+    ),
+    config: state.voiceTransport.preferred_stt_config,
+    onState: ({phase}) => {
+      if (phase === "listening") {
+        state.listening = true;
+        $("micBtn").classList.add("listening");
+        setConnection("Listening · server STT");
+        return;
+      }
+      if (phase === "processing") {
+        state.listening = false;
+        $("micBtn").classList.remove("listening");
+        setThinking(true);
+        setConnection("Processing voice · server STT");
+        return;
+      }
+
+      state.listening = false;
+      $("micBtn").classList.remove("listening");
+      if (state.ws?.readyState === WebSocket.OPEN) {
+        setConnection("Connected");
+      }
+    },
+    onPartial: (data) => {
+      const text = (data?.text || "").trim();
+      if (text) $("answerBox").value = text;
+    },
+    onFinal: (data) => {
+      handleServerSttFinal(data);
+    },
+    onError: (error) => {
+      state.listening = false;
+      $("micBtn").classList.remove("listening");
+      if (state.voiceTransport) {
+        state.voiceTransport.streaming_stt_available = false;
+        state.voiceTransport.stt_health = "degraded";
+      }
+      state.serverSttClient = null;
+      setThinking(false);
+      setConnection(
+        "Server microphone unavailable · retry uses browser speech",
+        true,
+      );
+      console.warn("Server STT fallback", error);
+    },
+  });
+  return state.serverSttClient;
 }
 
 function browserSpeak(turn) {
@@ -197,6 +326,13 @@ async function loadVoiceTransportCapabilities() {
     };
   }
 
+  const sttConfigured = Boolean(
+    state.voiceTransport.streaming_stt_enabled
+  );
+  const sttAvailable = (
+    state.voiceTransport.streaming_stt_available
+    ?? sttConfigured
+  );
   const ttsConfigured = Boolean(
     state.voiceTransport.streaming_tts_enabled
   );
@@ -205,24 +341,24 @@ async function loadVoiceTransportCapabilities() {
     ?? ttsConfigured
   );
 
-  if (ttsConfigured && ttsAvailable) {
+  if (sttAvailable && ttsAvailable) {
     $("voiceTitle").textContent = "Server voice";
     $("voiceDescription").textContent = (
-      "Nora can stream synthesized audio from the server. "
-      + "The microphone still uses the browser demo input when supported."
+      "Server STT and TTS are available. "
+      + "Browser speech remains a fallback path."
     );
-  } else if (ttsConfigured) {
-    $("voiceTitle").textContent = "Browser fallback";
+  } else if (sttAvailable || ttsAvailable) {
+    $("voiceTitle").textContent = "Hybrid voice";
     $("voiceDescription").textContent = (
-      "Server TTS is temporarily unavailable "
-      + `(${state.voiceTransport.tts_health || "degraded"}). `
-      + "Browser speech synthesis remains available."
+      `Server STT: ${sttAvailable ? "available" : (state.voiceTransport.stt_health || "fallback")}. `
+      + `Server TTS: ${ttsAvailable ? "available" : (state.voiceTransport.tts_health || "fallback")}. `
+      + "Unavailable directions fall back to browser voice."
     );
   } else {
     $("voiceTitle").textContent = "Browser voice";
     $("voiceDescription").textContent = (
-      "Server TTS is not configured, so this session can use "
-      + "the browser speech synthesis fallback."
+      "Server voice is unavailable for this session. "
+      + "Browser speech recognition and synthesis are used when supported."
     );
   }
 }
@@ -242,13 +378,7 @@ function ensureRecognition() {
     state.recognitionFinalSent = false;
     $("micBtn").classList.add("listening");
 
-    if (state.activeTtsTurnId) {
-      state.bargeInPending = true;
-      state.serverTtsPlayer?.stopLocalPlayback();
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
-    }
+    stopPlaybackForBargeIn();
     sendVoiceEvent("voice_speech_started");
     setConnection("Listening…");
   };
@@ -307,18 +437,55 @@ function ensureRecognition() {
   return recognition;
 }
 
-function toggleMic() {
-  const recognition = ensureRecognition();
-  if (!recognition) {
-    setConnection("Speech recognition is not supported in this browser", true);
+async function toggleMic() {
+  if (state.serverSttClient?.isRecording()) {
+    try {
+      await state.serverSttClient.stop();
+    } catch (error) {
+      setConnection(error.message, true);
+    }
     return;
   }
-  if (state.listening) {
-    recognition.stop();
-  } else {
-    recognition.lang = state.session?.locale?.startsWith("ar") ? "ar-SA" : "en-US";
-    recognition.start();
+
+  if (state.listening && state.recognition) {
+    state.recognition.stop();
+    return;
   }
+
+  const serverClient = ensureServerSttClient();
+  if (serverClient) {
+    stopPlaybackForBargeIn();
+    try {
+      await serverClient.start();
+      return;
+    } catch (error) {
+      if (state.voiceTransport) {
+        state.voiceTransport.streaming_stt_available = false;
+        state.voiceTransport.stt_health = "degraded";
+      }
+      state.serverSttClient = null;
+      setConnection(
+        "Server microphone unavailable · using browser speech",
+        true,
+      );
+    }
+  }
+
+  const recognition = ensureRecognition();
+  if (!recognition) {
+    setConnection(
+      "No server STT and browser speech recognition is unavailable",
+      true,
+    );
+    return;
+  }
+
+  recognition.lang = (
+    state.session?.locale?.startsWith("ar")
+    ? "ar-SA"
+    : "en-US"
+  );
+  recognition.start();
 }
 
 async function toggleVoice() {
@@ -342,6 +509,12 @@ async function toggleVoice() {
     return;
   }
 
+  if (state.serverSttClient) {
+    await state.serverSttClient.cancel("voice_disabled");
+  }
+  if (state.recognition && state.listening) {
+    state.recognition.stop();
+  }
   if (state.serverTtsPlayer) {
     await state.serverTtsPlayer.cancel("voice_disabled");
   }
@@ -685,8 +858,9 @@ $("reopenToolBtn").addEventListener("click", () => {
 $("restartBtn").addEventListener("click", () => location.reload());
 
 if (!browserSpeechRecognition()) {
-  $("micBtn").disabled = true;
-  $("micBtn").title = "Speech recognition is not supported by this browser";
+  $("micBtn").title = (
+    "Requires configured server STT or browser speech recognition"
+  );
 }
 $("answerBox").addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
