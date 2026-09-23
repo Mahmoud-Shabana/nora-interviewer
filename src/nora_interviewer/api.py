@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from pydantic import ValidationError
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from .audio_stream_manager import AudioStreamManager
@@ -24,6 +24,11 @@ from .config import (
 )
 from .counterfactual import CounterfactualReplayReport
 from .feedback import CandidateFeedbackReport
+from .operations import (
+    OperationalSnapshot,
+    OperationsService,
+    render_prometheus,
+)
 from .models import (
     AppealReviewRequest,
     AppealReviewSubmission,
@@ -161,6 +166,13 @@ tts_bridge = VoiceOutputBridge(
     provider=streaming_tts_provider,
     voice=voice,
 )
+operations = OperationsService(
+    store=store,
+    review_service=review_service,
+    provider_health=voice_provider_health,
+    audio_stream_manager=audio_stream_manager,
+    tts_bridge=tts_bridge,
+)
 AUDIO_RECONNECT_GRACE_SECONDS = 30.0
 _audio_expiry_tasks: dict[str, asyncio.Task] = {}
 
@@ -295,6 +307,41 @@ async def readiness() -> dict[str, str]:
         "storage": type(store).__name__,
         "api_version": API_VERSION,
     }
+
+
+@app.get(
+    "/v1/system/operations",
+    response_model=OperationalSnapshot,
+)
+async def operational_snapshot(
+    principal: Principal = Depends(current_principal),
+) -> OperationalSnapshot:
+    require_global_permission(
+        principal,
+        Permission.READ_SYSTEM,
+    )
+    return await operations.snapshot()
+
+
+@app.get(
+    "/v1/system/metrics",
+    response_class=PlainTextResponse,
+)
+async def operational_metrics(
+    principal: Principal = Depends(current_principal),
+) -> PlainTextResponse:
+    require_global_permission(
+        principal,
+        Permission.READ_SYSTEM,
+    )
+    snapshot = await operations.snapshot()
+    return PlainTextResponse(
+        render_prometheus(snapshot),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+        headers={
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @app.get(
