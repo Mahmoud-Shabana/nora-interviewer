@@ -230,11 +230,15 @@ async def submit_tool(
 
 
 @app.get("/v1/sessions/{session_id}", response_model=InterviewSession)
-async def get_session(session_id: str) -> InterviewSession:
-    session = await store.get_session(session_id)
-    if not session:
-        raise HTTPException(404, "Session not found")
-    return session
+async def get_session(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> InterviewSession:
+    return await require_session_permission(
+        session_id,
+        principal,
+        Permission.READ_SESSION,
+    )
 
 
 @app.post(
@@ -312,7 +316,15 @@ async def observe_evidence(
     "/v1/sessions/{session_id}/feedback",
     response_model=CandidateFeedbackReport,
 )
-async def candidate_feedback(session_id: str) -> CandidateFeedbackReport:
+async def candidate_feedback(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> CandidateFeedbackReport:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.READ_FEEDBACK,
+    )
     return await service.candidate_feedback(session_id)
 
 
@@ -320,7 +332,15 @@ async def candidate_feedback(session_id: str) -> CandidateFeedbackReport:
     "/v1/sessions/{session_id}/events",
     response_model=list[InterviewEvent],
 )
-async def get_events(session_id: str) -> list[InterviewEvent]:
+async def get_events(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> list[InterviewEvent]:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.READ_EVENTS,
+    )
     return await service.events(session_id)
 
 
@@ -328,7 +348,15 @@ async def get_events(session_id: str) -> list[InterviewEvent]:
     "/v1/sessions/{session_id}/replay",
     response_model=ReplayState,
 )
-async def replay_session(session_id: str) -> ReplayState:
+async def replay_session(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> ReplayState:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.READ_REPLAY,
+    )
     return await service.replay(session_id)
 
 
@@ -336,12 +364,28 @@ async def replay_session(session_id: str) -> ReplayState:
     "/v1/sessions/{session_id}/decision-replay",
     response_model=CounterfactualReplayReport,
 )
-async def decision_replay(session_id: str) -> CounterfactualReplayReport:
+async def decision_replay(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> CounterfactualReplayReport:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.RUN_DECISION_REPLAY,
+    )
     return await service.decision_replay(session_id)
 
 
 @app.get("/v1/sessions/{session_id}/voxrubric", response_model=VoxRubricTrace)
-async def export_voxrubric(session_id: str) -> VoxRubricTrace:
+async def export_voxrubric(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> VoxRubricTrace:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.EXPORT_TRACE,
+    )
     return await service.export_voxrubric(session_id)
 
 
