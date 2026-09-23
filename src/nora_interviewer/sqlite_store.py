@@ -320,5 +320,18 @@ class SqliteStore:
         return str(row[0])
 
 
+    async def ping(self) -> None:
+        await asyncio.to_thread(
+            self._ping_sync,
+        )
+
+    def _ping_sync(self) -> None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT 1"
+            ).fetchone()
+        if row is None or int(row[0]) != 1:
+            raise RuntimeError("SQLite readiness probe failed")
+
     async def close(self) -> None:
         return None
