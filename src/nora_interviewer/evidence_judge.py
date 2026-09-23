@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import Field, model_validator
 
@@ -46,6 +46,7 @@ class JudgeFinding(StrictModel):
 
 class JudgeResponse(StrictModel):
     findings: list[JudgeFinding] = Field(default_factory=list)
+    audit: dict[str, Any] = Field(default_factory=dict)
 
 
 class EvidenceJudge(Protocol):
