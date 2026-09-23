@@ -46,6 +46,11 @@ def test_capability_description_contains_backends_not_secrets(monkeypatch):
         capabilities.streaming_stt_backend
         == "DisabledStreamingSpeechProvider"
     )
+    assert capabilities.streaming_tts_enabled is False
+    assert (
+        capabilities.streaming_tts_backend
+        == "DisabledStreamingTtsProvider"
+    )
 
     serialized = capabilities.model_dump_json()
     assert "API_KEY" not in serialized
