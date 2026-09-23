@@ -102,6 +102,13 @@ Technical communication</textarea></label>
           <button class="ghost" id="restartBtn" type="button">New session</button>
         </div>
         <div class="messages" id="messages" aria-live="polite"></div>
+        <div class="candidate-controls" aria-label="Interview controls">
+          <button type="button" data-control="repeat">Repeat</button>
+          <button type="button" data-control="clarify">Clarify</button>
+          <button type="button" data-control="thinking_time" id="thinkingBtn">Thinking time</button>
+          <button type="button" data-control="correct_last_answer">Correct last answer</button>
+          <button type="button" data-control="candidate_question">Ask Nora</button>
+        </div>
         <div class="typing hidden" id="typing"><span></span><span></span><span></span><em>Nora is thinking</em></div>
         <form class="composer" id="answerForm">
           <button class="mic" id="micBtn" type="button" aria-label="Record answer" title="Record answer">●</button>
