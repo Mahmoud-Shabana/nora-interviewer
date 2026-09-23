@@ -5,6 +5,7 @@ from pydantic import Field
 from .models import StrictModel
 from .provider_health import ProviderHealthState
 from .providers.streaming_tts import TtsAudioConfig
+from .voice_stream import AudioStreamConfig
 
 
 class VoiceTransportCapabilities(StrictModel):
@@ -16,6 +17,9 @@ class VoiceTransportCapabilities(StrictModel):
     tts_health: ProviderHealthState
     stt_protocol: str | None = None
     tts_protocol: str | None = None
+    preferred_stt_config: AudioStreamConfig = Field(
+        default_factory=AudioStreamConfig
+    )
     preferred_tts_config: TtsAudioConfig = Field(
         default_factory=TtsAudioConfig
     )
