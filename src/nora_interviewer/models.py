@@ -110,6 +110,9 @@ class EventType(str, Enum):
     VOICE_TTS_COMPLETED = "voice_tts_completed"
     VOICE_TTS_CANCELLED = "voice_tts_cancelled"
     VOICE_BARGE_IN = "voice_barge_in"
+    VOICE_PROVIDER_FAILED = "voice_provider_failed"
+    VOICE_TRANSPORT_SELECTED = "voice_transport_selected"
+    VOICE_TRANSPORT_FALLBACK = "voice_transport_fallback"
     SESSION_COMPLETED = "session_completed"
     SESSION_CANCELLED = "session_cancelled"
 
