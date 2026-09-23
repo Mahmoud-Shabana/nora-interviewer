@@ -71,8 +71,10 @@ It separates:
 | Replay / counterfactual analysis | ✅ Implemented |
 | Independent semantic Evidence Judge | ✅ Implemented (experimental) |
 | Production streaming STT/TTS adapters | 🧭 Planned |
-| Durable production persistence | 🧭 Planned |
-| Recruiter/candidate authorization | 🧭 Planned |
+| Durable local SQLite persistence | ✅ Implemented |
+| Role/permission authorization boundary | ✅ Implemented |
+| Production OIDC/JWT authentication | 🧭 Planned |
+| PostgreSQL multi-instance persistence | 🧭 Planned |
 
 ---
 
@@ -612,6 +614,50 @@ The browser UI currently includes:
 
 ---
 
+# 💾 Persistence
+
+Nora's orchestration depends on a provider-neutral `Store` contract.
+
+### Zero-config memory mode
+
+```bash
+export NORA_STORE_MODE=memory
+```
+
+### Durable local SQLite mode
+
+```bash
+export NORA_STORE_MODE=sqlite
+export NORA_SQLITE_PATH=.nora/nora.db
+```
+
+See [Storage Backends](docs/STORAGE.md).
+
+---
+
+# 🔑 Authorization
+
+Nora has an application-level role/permission model for:
+
+- candidate;
+- recruiter;
+- reviewer;
+- internal service.
+
+Candidate permissions are session-owner scoped by `candidate_ref`.
+
+For local integration tests:
+
+```bash
+export NORA_AUTH_MODE=dev-header
+```
+
+This enables development-only `X-Nora-*` principal headers. It is not production authentication.
+
+See [Authorization Model](docs/AUTHORIZATION.md).
+
+---
+
 # 🚀 Quick start
 
 ## Requirements
@@ -742,6 +788,8 @@ export NORA_SANDBOX_IMAGE=python:3.12-alpine
 nora-interviewer/
 ├── src/nora_interviewer/
 │   ├── api.py                 # FastAPI + WebSocket transport
+│   ├── authorization.py       # Roles and permission policy
+│   ├── authn.py               # Principal resolvers
 │   ├── service.py             # Interview orchestration
 │   ├── models.py              # Domain contracts
 │   ├── planner.py             # Dual-lane planner
@@ -755,6 +803,8 @@ nora-interviewer/
 │   ├── tool_templates.py      # Trusted tool templates
 │   ├── coding.py              # Coding challenge manager/evaluator
 │   ├── sandbox.py             # Code execution boundary
+│   ├── storage.py             # Store protocol + memory backend
+│   ├── sqlite_store.py        # Durable local persistence
 │   ├── providers/             # Interview brain/provider adapters
 │   └── web/                   # Built-in interview room
 ├── tests/
@@ -825,6 +875,8 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Candidate Rights](docs/CANDIDATE_RIGHTS.md)
 - [Realtime Voice Protocol](docs/VOICE_PROTOCOL.md)
 - [Independent Evidence Judge](docs/EVIDENCE_JUDGE.md)
+- [Authorization Model](docs/AUTHORIZATION.md)
+- [Storage Backends](docs/STORAGE.md)
 - [VoxRubric](https://github.com/Mahmoud-Shabana/voxrubric)
 
 ---
@@ -859,6 +911,11 @@ Nora is intentionally conservative around high-stakes behavior.
 - [x] Strict literal quote grounding
 - [x] Non-fatal semantic judge failure audit
 - [x] Independent judge provider configuration
+- [x] Role/permission authorization policy
+- [x] Candidate session ownership enforcement
+- [x] REST + WebSocket authorization boundary
+- [x] Durable local SQLite store
+- [x] Configurable memory/SQLite persistence
 
 ## 🚧 In progress
 
@@ -871,8 +928,8 @@ Nora is intentionally conservative around high-stakes behavior.
 - [ ] Production streaming TTS adapter
 - [ ] VAD and audio chunk transport
 - [ ] Reconnect / backpressure handling
-- [ ] Recruiter / candidate authorization
-- [ ] PostgreSQL persistence
+- [ ] Production OIDC/JWT principal resolver
+- [ ] PostgreSQL multi-instance persistence
 - [ ] encrypted object storage
 - [ ] retention controls
 - [ ] external sandbox service
