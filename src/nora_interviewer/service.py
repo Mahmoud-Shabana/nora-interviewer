@@ -772,7 +772,8 @@ class InterviewService:
             },
         )
         session.turns.append(turn)
-        session.asked_questions += 1
+        if lane is not QuestionLane.CLOSING:
+            session.asked_questions += 1
         if lane is QuestionLane.ANCHOR:
             for competency_id in decision.competency_tags:
                 if competency_id not in session.asked_anchor_competencies:
