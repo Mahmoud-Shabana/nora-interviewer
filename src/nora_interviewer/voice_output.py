@@ -15,6 +15,8 @@ class VoiceTransportCapabilities(StrictModel):
     streaming_tts_available: bool
     stt_health: ProviderHealthState
     tts_health: ProviderHealthState
+    vad_enabled: bool = False
+    vad_backend: str | None = None
     stt_protocol: str | None = None
     tts_protocol: str | None = None
     preferred_stt_config: AudioStreamConfig = Field(
