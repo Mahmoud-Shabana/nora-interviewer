@@ -324,6 +324,10 @@ class VoiceOutputBridge:
             except TtsStreamNotFoundError:
                 continue
 
+    async def active_stream_count(self) -> int:
+        async with self._lock:
+            return len(self._active_by_session)
+
     def state(
         self,
         stream_id: str,
