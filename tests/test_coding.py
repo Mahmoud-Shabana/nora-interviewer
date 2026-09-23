@@ -48,11 +48,12 @@ def test_coding_tool_scores_runner_results():
     invocation = manager.create(challenge())
     tool = CodingInterviewTool(manager, FakePassingRunner())
     session = InterviewSession(job_id="job", candidate_ref="c", locale="en")
+    from nora_interviewer.models import Competency
     job = JobSpec(
         id="job",
         title="Engineer",
         description="Build systems",
-        competencies=[],
+        competencies=[Competency(id="python", description="Python engineering")],
     )
     submission = ToolSubmission(
         tool_id=invocation.id,
@@ -69,11 +70,12 @@ def test_disabled_sandbox_never_invents_a_code_score():
     invocation = manager.create(challenge())
     tool = CodingInterviewTool(manager, DisabledSandboxRunner())
     session = InterviewSession(job_id="job", candidate_ref="c", locale="en")
+    from nora_interviewer.models import Competency
     job = JobSpec(
         id="job",
         title="Engineer",
         description="Build systems",
-        competencies=[],
+        competencies=[Competency(id="python", description="Python engineering")],
     )
     submission = ToolSubmission(
         tool_id=invocation.id,
