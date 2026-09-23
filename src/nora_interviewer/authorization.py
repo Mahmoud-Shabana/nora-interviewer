@@ -45,6 +45,9 @@ class Permission(str, Enum):
     DRAFT_RUBRIC = "draft_rubric"
     READ_RUBRIC_DRAFT = "read_rubric_draft"
     APPROVE_RUBRIC = "approve_rubric"
+    ASSIGN_REVIEW = "assign_review"
+    WORK_REVIEW_ASSIGNMENT = "work_review_assignment"
+    CANCEL_REVIEW_ASSIGNMENT = "cancel_review_assignment"
 
 
 class Principal(StrictModel):
@@ -89,6 +92,8 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.DRAFT_RUBRIC,
         Permission.READ_RUBRIC_DRAFT,
         Permission.APPROVE_RUBRIC,
+        Permission.ASSIGN_REVIEW,
+        Permission.CANCEL_REVIEW_ASSIGNMENT,
     },
     ActorRole.REVIEWER: {
         Permission.READ_SESSION,
@@ -105,6 +110,7 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.REVIEW_INTEGRITY,
         Permission.EXPORT_REVIEW_BUNDLE,
         Permission.REEVALUATE_EVIDENCE,
+        Permission.WORK_REVIEW_ASSIGNMENT,
     },
     ActorRole.SERVICE: set(Permission),
 }
