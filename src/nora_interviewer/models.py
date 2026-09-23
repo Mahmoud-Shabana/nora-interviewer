@@ -23,10 +23,42 @@ class Speaker(str, Enum):
     SYSTEM = "system"
 
 
+class QuestionLane(str, Enum):
+    ANCHOR = "anchor"
+    ADAPTIVE = "adaptive"
+    CLOSING = "closing"
+
+
+class EvidenceState(str, Enum):
+    UNKNOWN = "unknown"
+    CLAIMED = "claimed"
+    DEMONSTRATED = "demonstrated"
+    VERIFIED = "verified"
+    CONTRADICTED = "contradicted"
+    INSUFFICIENT = "insufficient_evidence"
+
+
+class AppealStatus(str, Enum):
+    PENDING = "pending"
+    REVIEWED = "reviewed"
+
+
+class EventType(str, Enum):
+    SESSION_CREATED = "session_created"
+    INTERVIEW_STARTED = "interview_started"
+    INTERVIEWER_TURN = "interviewer_turn"
+    CANDIDATE_TURN = "candidate_turn"
+    TRANSCRIPT_CORRECTED = "transcript_corrected"
+    APPEAL_SUBMITTED = "appeal_submitted"
+    EVIDENCE_OBSERVED = "evidence_observed"
+    SESSION_COMPLETED = "session_completed"
+
+
 class Competency(StrictModel):
     id: str = Field(min_length=1)
     description: str = Field(min_length=1)
     weight: float = Field(default=1.0, gt=0)
+    anchor_question: str | None = Field(default=None, min_length=4)
 
 
 class JobSpec(StrictModel):
@@ -35,6 +67,7 @@ class JobSpec(StrictModel):
     description: str = Field(min_length=5)
     competencies: list[Competency] = Field(min_length=1)
     max_questions: int = Field(default=8, ge=1, le=30)
+    anchor_ratio: float = Field(default=0.4, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
     def unique_competencies(self) -> "JobSpec":
@@ -62,6 +95,55 @@ class Turn(StrictModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class EvidenceItem(StrictModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    turn_id: str
+    state: EvidenceState
+    confidence: float = Field(ge=0.0, le=1.0)
+    note: str = Field(min_length=1)
+    source: str = "interview"
+
+
+class CompetencyEvidence(StrictModel):
+    competency_id: str
+    state: EvidenceState = EvidenceState.UNKNOWN
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    evidence: list[EvidenceItem] = Field(default_factory=list)
+
+
+class TranscriptRevision(StrictModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    turn_id: str
+    original_text: str
+    corrected_text: str
+    reason: str | None = None
+
+
+class TranscriptCorrectionRequest(StrictModel):
+    turn_id: str
+    corrected_text: str = Field(min_length=1, max_length=20_000)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class CandidateAppeal(StrictModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    message: str = Field(min_length=3, max_length=5000)
+    turn_ids: list[str] = Field(default_factory=list)
+    status: AppealStatus = AppealStatus.PENDING
+
+
+class CandidateAppealRequest(StrictModel):
+    message: str = Field(min_length=3, max_length=5000)
+    turn_ids: list[str] = Field(default_factory=list)
+
+
+class InterviewEvent(StrictModel):
+    seq: int = Field(ge=1)
+    type: EventType
+    turn_id: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
 class InterviewSession(StrictModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     job_id: str
@@ -71,7 +153,12 @@ class InterviewSession(StrictModel):
     turns: list[Turn] = Field(default_factory=list)
     covered_competencies: list[str] = Field(default_factory=list)
     followups_by_competency: dict[str, int] = Field(default_factory=dict)
+    asked_anchor_competencies: list[str] = Field(default_factory=list)
     asked_questions: int = 0
+    evidence_graph: dict[str, CompetencyEvidence] = Field(default_factory=dict)
+    transcript_revisions: list[TranscriptRevision] = Field(default_factory=list)
+    appeals: list[CandidateAppeal] = Field(default_factory=list)
+    events: list[InterviewEvent] = Field(default_factory=list)
 
 
 class CandidateResponse(StrictModel):
@@ -90,6 +177,14 @@ class SessionStep(StrictModel):
     session_id: str
     status: SessionStatus
     interviewer_turn: Turn | None = None
+
+
+class EvidenceObservation(StrictModel):
+    competency_id: str
+    turn_id: str
+    state: EvidenceState
+    confidence: float = Field(ge=0.0, le=1.0)
+    note: str = Field(min_length=1)
 
 
 class VoxRubricTrace(StrictModel):
