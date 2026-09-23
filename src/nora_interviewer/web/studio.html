@@ -108,11 +108,15 @@
           <div id="competencyEditor" class="competency-editor"></div>
 
           <div class="approval-box">
+            <label class="approval-note">
+              Review note
+              <textarea id="approvalNote" rows="3" placeholder="Optional: summarize what you reviewed or changed before approval."></textarea>
+            </label>
             <label class="approval-check">
               <input id="approvalCheck" type="checkbox">
               <span>
                 I reviewed the competency definitions, weights, and anchor
-                questions and want to create this job configuration.
+                questions and want to approve this rubric and create the job.
               </span>
             </label>
             <button id="createJobButton" class="primary" type="button" disabled>
