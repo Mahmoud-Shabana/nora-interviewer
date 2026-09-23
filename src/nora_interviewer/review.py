@@ -27,6 +27,23 @@ class ReviewReason(StrictModel):
     severity: str = Field(pattern=r"^(info|attention|high)$")
 
 
+class AppealReviewSummary(StrictModel):
+    id: str
+    message: str
+    turn_ids: list[str] = Field(default_factory=list)
+    status: AppealStatus
+    reviewed_by: str | None = None
+    review_note: str | None = None
+
+
+class IntegrityReviewSummary(StrictModel):
+    id: str
+    kind: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    note: str
+    requires_human_review: bool = True
+
+
 class RecruiterSessionReport(StrictModel):
     session_id: str
     job_id: str
@@ -35,6 +52,8 @@ class RecruiterSessionReport(StrictModel):
     status: str
     competencies: list[CompetencyReviewSummary]
     reasons: list[ReviewReason] = Field(default_factory=list)
+    appeals: list[AppealReviewSummary] = Field(default_factory=list)
+    integrity: list[IntegrityReviewSummary] = Field(default_factory=list)
     pending_appeals: int = Field(ge=0)
     integrity_signals: int = Field(ge=0)
     unresolved_tools: int = Field(ge=0)
@@ -107,9 +126,20 @@ def build_recruiter_report(
                 )
             )
 
+    appeals = [
+        AppealReviewSummary(
+            id=item.id,
+            message=item.message,
+            turn_ids=item.turn_ids,
+            status=item.status,
+            reviewed_by=item.reviewed_by,
+            review_note=item.review_note,
+        )
+        for item in session.appeals
+    ]
     pending_appeals = sum(
-        appeal.status is AppealStatus.PENDING
-        for appeal in session.appeals
+        item.status is AppealStatus.PENDING
+        for item in session.appeals
     )
     if pending_appeals:
         reasons.append(
@@ -120,7 +150,17 @@ def build_recruiter_report(
             )
         )
 
-    integrity_signals = len(session.integrity_signals)
+    integrity = [
+        IntegrityReviewSummary(
+            id=item.id,
+            kind=item.kind,
+            confidence=item.confidence,
+            note=item.note,
+            requires_human_review=item.requires_human_review,
+        )
+        for item in session.integrity_signals
+    ]
+    integrity_signals = len(integrity)
     if integrity_signals:
         reasons.append(
             ReviewReason(
@@ -176,6 +216,8 @@ def build_recruiter_report(
         status=session.status.value,
         competencies=competencies,
         reasons=reasons,
+        appeals=appeals,
+        integrity=integrity,
         pending_appeals=pending_appeals,
         integrity_signals=integrity_signals,
         unresolved_tools=unresolved_tools,
