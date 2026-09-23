@@ -12,6 +12,7 @@ from .voice import (
     VoiceTransportSelectionEvent,
     VoiceTurnResult,
 )
+from .vad import Pcm16EnergyVad, VadConfig
 from .voice_stream import (
     AudioChunkMessage,
     AudioChunkResult,
@@ -53,6 +54,7 @@ class _ProviderStream:
     session: StreamingSpeechSession
     locale: str
     queue: asyncio.Queue
+    vad: Pcm16EnergyVad | None = None
     pump_task: asyncio.Task | None = None
     committed: bool = False
 
@@ -72,6 +74,7 @@ class VoiceStreamBridge:
         provider: StreamingSpeechProvider,
         voice: RealtimeVoiceCoordinator,
         event_queue_size: int = 64,
+        vad_config: VadConfig | None = None,
     ) -> None:
         if event_queue_size < 1:
             raise ValueError(
@@ -81,6 +84,7 @@ class VoiceStreamBridge:
         self.provider = provider
         self.voice = voice
         self.event_queue_size = event_queue_size
+        self.vad_config = vad_config
         self._provider_streams: dict[
             str,
             _ProviderStream,
@@ -130,6 +134,14 @@ class VoiceStreamBridge:
             locale=locale,
             queue=asyncio.Queue(
                 maxsize=self.event_queue_size
+            ),
+            vad=(
+                Pcm16EnergyVad(self.vad_config)
+                if (
+                    self.vad_config is not None
+                    and config.encoding.value == "pcm16"
+                )
+                else None
             ),
         )
         self._provider_streams[
@@ -267,6 +279,13 @@ class VoiceStreamBridge:
             )
 
         state = self.manager.state(stream_id)
+        vad_observation = None
+        if provider_stream.vad is not None:
+            vad_observation = provider_stream.vad.observe(
+                audio,
+                sample_rate_hz=state.config.sample_rate_hz,
+                channels=state.config.channels,
+            )
         return AudioChunkResult(
             accepted=result.accepted,
             duplicate=result.duplicate,
@@ -274,6 +293,7 @@ class VoiceStreamBridge:
             next_sequence=result.next_sequence,
             generation=result.generation,
             buffered_bytes=state.buffered_bytes,
+            vad=vad_observation,
         )
 
     async def commit(
