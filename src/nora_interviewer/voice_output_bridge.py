@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from .models import Speaker
+from .provider_health import ProviderCircuitOpenError
 from .providers.streaming_tts import (
     StreamingTtsProvider,
     StreamingTtsSession,
@@ -18,6 +19,7 @@ from .storage import Store
 from .voice import (
     RealtimeVoiceCoordinator,
     TtsLifecycleEvent,
+    VoiceTransportSelectionEvent,
 )
 from .voice_output import (
     TtsStreamConflictError,
@@ -94,17 +96,52 @@ class VoiceOutputBridge:
             generation = self.voice.state(
                 session_id
             ).generation
-            provider_session = await self.provider.synthesize(
-                text=turn.text,
-                locale=locale or session.locale,
-                generation=generation,
-                config=config,
-            )
+            try:
+                provider_session = await self.provider.synthesize(
+                    text=turn.text,
+                    locale=locale or session.locale,
+                    generation=generation,
+                    config=config,
+                )
+            except Exception as exc:
+                if not isinstance(
+                    exc,
+                    ProviderCircuitOpenError,
+                ):
+                    await self.voice.provider_failed(
+                        session_id,
+                        direction="tts",
+                        provider_id=str(
+                            getattr(
+                                self.provider,
+                                "provider_id",
+                                type(self.provider).__name__,
+                            )
+                        ),
+                        error_type=type(exc).__name__,
+                        message=str(exc),
+                    )
+                raise
 
             await self.voice.tts_started(
                 session_id,
                 TtsLifecycleEvent(
                     turn_id=turn.id,
+                ),
+            )
+
+            await self.voice.transport_selected(
+                session_id,
+                VoiceTransportSelectionEvent(
+                    direction="tts",
+                    transport="server",
+                    provider_id=str(
+                        getattr(
+                            self.provider,
+                            "provider_id",
+                            type(self.provider).__name__,
+                        )
+                    ),
                 ),
             )
 
@@ -182,7 +219,27 @@ class VoiceOutputBridge:
             normal_completion = True
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
+            if not isinstance(
+                exc,
+                ProviderCircuitOpenError,
+            ):
+                try:
+                    await self.voice.provider_failed(
+                        record.state.session_id,
+                        direction="tts",
+                        provider_id=str(
+                            getattr(
+                                self.provider,
+                                "provider_id",
+                                type(self.provider).__name__,
+                            )
+                        ),
+                        error_type=type(exc).__name__,
+                        message=str(exc),
+                    )
+                except Exception:
+                    pass
             await self._mark_cancelled(
                 record,
                 reason="tts_provider_failure",
