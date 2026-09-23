@@ -64,10 +64,13 @@ from .providers.streaming_speech import StreamingSpeechUnavailableError
 from .providers.streaming_tts import StreamingTtsUnavailableError
 from .retention import RetentionManager, RetentionReport, RetentionRequest
 from .rubric_drafting import (
+    RubricApprovalRequest,
+    RubricApprovalResult,
     RubricDraft,
     RubricDraftError,
     RubricDraftRequest,
 )
+from .rubric_service import RubricWorkflowService
 from .service import InterviewService
 from .voice import (
     RealtimeVoiceCoordinator,
@@ -118,6 +121,10 @@ service = InterviewService(
 voice = RealtimeVoiceCoordinator(service=service, store=store)
 principal_resolver = build_principal_resolver()
 rubric_drafter = build_rubric_drafter()
+rubric_service = RubricWorkflowService(
+    store=store,
+    drafter=rubric_drafter,
+)
 retention = RetentionManager(store)
 review_service = ReviewService(store=store)
 streaming_speech_provider = build_streaming_speech_provider()
@@ -288,7 +295,7 @@ async def draft_rubric(
         Permission.DRAFT_RUBRIC,
     )
     try:
-        return await rubric_drafter.draft(
+        return await rubric_service.draft(
             request
         )
     except RubricDraftError as exc:
@@ -296,6 +303,43 @@ async def draft_rubric(
             status_code=422,
             detail=str(exc),
         ) from exc
+
+
+@app.get(
+    "/v1/rubrics/drafts/{draft_id}",
+    response_model=RubricDraft,
+)
+async def get_rubric_draft(
+    draft_id: str,
+    principal: Principal = Depends(current_principal),
+) -> RubricDraft:
+    require_global_permission(
+        principal,
+        Permission.READ_RUBRIC_DRAFT,
+    )
+    return await rubric_service.get(
+        draft_id
+    )
+
+
+@app.post(
+    "/v1/rubrics/drafts/{draft_id}/approve",
+    response_model=RubricApprovalResult,
+)
+async def approve_rubric(
+    draft_id: str,
+    request: RubricApprovalRequest,
+    principal: Principal = Depends(current_principal),
+) -> RubricApprovalResult:
+    require_global_permission(
+        principal,
+        Permission.APPROVE_RUBRIC,
+    )
+    return await rubric_service.approve(
+        draft_id,
+        request,
+        approved_by=principal.id,
+    )
 
 
 @app.post(
