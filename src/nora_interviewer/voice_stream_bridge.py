@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import AsyncIterator
 
@@ -21,12 +22,6 @@ from .voice_stream import (
 )
 
 
-@dataclass
-class _ProviderStream:
-    session: StreamingSpeechSession
-    locale: str
-
-
 class StreamingVoiceEvent:
     """Marker base class for bridge events."""
 
@@ -43,8 +38,30 @@ class StreamingFinalTranscript(StreamingVoiceEvent):
     result: VoiceTurnResult
 
 
+@dataclass(frozen=True)
+class StreamingProviderFailure(StreamingVoiceEvent):
+    error_type: str
+    message: str
+
+
+_END = object()
+
+
+@dataclass
+class _ProviderStream:
+    session: StreamingSpeechSession
+    locale: str
+    queue: asyncio.Queue
+    pump_task: asyncio.Task | None = None
+
+
 class VoiceStreamBridge:
-    """Connect ordered audio transport to STT and Nora voice semantics."""
+    """Connect ordered audio transport to STT and Nora voice semantics.
+
+    Provider events are pumped into a server-side queue independently of any
+    particular client WebSocket. A temporary client disconnect therefore does
+    not make reconnect semantics depend on an already-dead socket consumer.
+    """
 
     def __init__(
         self,
@@ -52,11 +69,20 @@ class VoiceStreamBridge:
         manager: AudioStreamManager,
         provider: StreamingSpeechProvider,
         voice: RealtimeVoiceCoordinator,
+        event_queue_size: int = 64,
     ) -> None:
+        if event_queue_size < 1:
+            raise ValueError(
+                "event_queue_size must be >= 1"
+            )
         self.manager = manager
         self.provider = provider
         self.voice = voice
-        self._provider_streams: dict[str, _ProviderStream] = {}
+        self.event_queue_size = event_queue_size
+        self._provider_streams: dict[
+            str,
+            _ProviderStream,
+        ] = {}
 
     async def open(
         self,
@@ -79,16 +105,89 @@ class VoiceStreamBridge:
                 config=config,
             )
         except Exception:
-            self.manager.close(opened.state.stream_id)
+            self.manager.close(
+                opened.state.stream_id
+            )
             raise
 
-        self._provider_streams[
-            opened.state.stream_id
-        ] = _ProviderStream(
+        record = _ProviderStream(
             session=provider_session,
             locale=locale,
+            queue=asyncio.Queue(
+                maxsize=self.event_queue_size
+            ),
+        )
+        self._provider_streams[
+            opened.state.stream_id
+        ] = record
+        record.pump_task = asyncio.create_task(
+            self._pump_provider(
+                opened.state.stream_id,
+                record,
+                opened.state.generation,
+            )
         )
         return opened
+
+    async def _pump_provider(
+        self,
+        stream_id: str,
+        record: _ProviderStream,
+        generation: int,
+    ) -> None:
+        try:
+            async for event in record.session.events():
+                current = self.manager.state(
+                    stream_id
+                )
+                if (
+                    current.closed
+                    or current.generation != generation
+                ):
+                    break
+
+                transcript = TranscriptEvent(
+                    text=event.text,
+                    confidence=event.confidence,
+                )
+                if event.is_final:
+                    result = (
+                        await self.voice.transcript_final(
+                            current.session_id,
+                            transcript,
+                        )
+                    )
+                    await record.queue.put(
+                        StreamingFinalTranscript(
+                            event=event,
+                            result=result,
+                        )
+                    )
+                    break
+
+                voice_state = (
+                    await self.voice.transcript_partial(
+                        current.session_id,
+                        transcript,
+                    )
+                )
+                await record.queue.put(
+                    StreamingPartialTranscript(
+                        event=event,
+                        state=voice_state,
+                    )
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            await record.queue.put(
+                StreamingProviderFailure(
+                    error_type=type(exc).__name__,
+                    message=str(exc)[:1000],
+                )
+            )
+        finally:
+            await record.queue.put(_END)
 
     async def push_chunk(
         self,
@@ -103,7 +202,9 @@ class VoiceStreamBridge:
         if audio is None:
             return result
 
-        provider_stream = self._provider(stream_id)
+        provider_stream = self._provider(
+            stream_id
+        )
         try:
             await provider_stream.session.push_audio(
                 audio
@@ -124,45 +225,29 @@ class VoiceStreamBridge:
             buffered_bytes=state.buffered_bytes,
         )
 
+    async def next_event(
+        self,
+        *,
+        stream_id: str,
+    ) -> StreamingVoiceEvent | None:
+        record = self._provider(stream_id)
+        item = await record.queue.get()
+        if item is _END:
+            return None
+        return item
+
     async def events(
         self,
         *,
         stream_id: str,
     ) -> AsyncIterator[StreamingVoiceEvent]:
-        provider_stream = self._provider(stream_id)
-        state = self.manager.state(stream_id)
-
-        async for event in provider_stream.session.events():
-            current = self.manager.state(stream_id)
-            if current.closed:
-                break
-            if current.generation != state.generation:
-                # The caller should restart provider streaming for a new
-                # generation instead of applying stale transcript events.
-                break
-
-            transcript = TranscriptEvent(
-                text=event.text,
-                confidence=event.confidence,
+        while True:
+            event = await self.next_event(
+                stream_id=stream_id
             )
-            if event.is_final:
-                result = await self.voice.transcript_final(
-                    current.session_id,
-                    transcript,
-                )
-                yield StreamingFinalTranscript(
-                    event=event,
-                    result=result,
-                )
-            else:
-                voice_state = await self.voice.transcript_partial(
-                    current.session_id,
-                    transcript,
-                )
-                yield StreamingPartialTranscript(
-                    event=event,
-                    state=voice_state,
-                )
+            if event is None:
+                return
+            yield event
 
     def reconnect(
         self,
@@ -180,21 +265,10 @@ class VoiceStreamBridge:
             generation=generation,
             next_sequence=next_sequence,
         )
-        return self.voice.state(state.session_id)
-
-    async def rotate_generation(
-        self,
-        *,
-        stream_id: str,
-        generation: int,
-    ) -> None:
-        self.manager.rotate_generation(
-            stream_id,
-            generation,
+        self._provider(stream_id)
+        return self.voice.state(
+            state.session_id
         )
-        provider_stream = self._provider(stream_id)
-        await provider_stream.session.cancel()
-        del self._provider_streams[stream_id]
 
     async def close(
         self,
@@ -203,23 +277,34 @@ class VoiceStreamBridge:
         cancel_provider: bool = False,
     ) -> None:
         self.manager.close(stream_id)
-        provider_stream = self._provider_streams.pop(
+        record = self._provider_streams.pop(
             stream_id,
             None,
         )
-        if provider_stream is None:
+        if record is None:
             return
+
         if cancel_provider:
-            await provider_stream.session.cancel()
+            await record.session.cancel()
         else:
-            await provider_stream.session.close()
+            await record.session.close()
+
+        task = record.pump_task
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
     def _provider(
         self,
         stream_id: str,
     ) -> _ProviderStream:
         try:
-            return self._provider_streams[stream_id]
+            return self._provider_streams[
+                stream_id
+            ]
         except KeyError as exc:
             raise RuntimeError(
                 f"no STT provider session for audio stream {stream_id}"
