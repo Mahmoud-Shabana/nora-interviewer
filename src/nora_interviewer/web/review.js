@@ -50,6 +50,26 @@ function renderQueue(items) {
   }
 }
 
+async function reevaluateEvidence(sessionId, answerTurnId) {
+  const confirmed = window.confirm(
+    "Run the configured semantic evidence judge again for this candidate answer? " +
+    "A successful run supersedes prior active semantic evidence but preserves history."
+  );
+  if (!confirmed) return;
+
+  try {
+    await jsonFetch(
+      `/v1/sessions/${sessionId}/evidence/${answerTurnId}/reevaluate`,
+      {method: "POST"},
+    );
+    await Promise.all([loadQueue(), loadSummary()]);
+    const active = document.querySelector(`[data-session-id="${sessionId}"]`);
+    await loadReport(sessionId, active);
+  } catch (error) {
+    window.alert(error.message);
+  }
+}
+
 async function reviewIntegrity(sessionId, signalId) {
   const note = window.prompt("Integrity review note:");
   if (!note || note.trim().length < 2) return;
@@ -152,6 +172,41 @@ function renderReport(report) {
       <div class="source-list">${item.source_types.map(source => `<span>${source}</span>`).join("")}</div>
     `;
     competencies.appendChild(card);
+  }
+
+  const judgeRuns = $("judgeRuns");
+  judgeRuns.innerHTML = "";
+  if (!report.evidence_judge_runs.length) {
+    judgeRuns.innerHTML = '<div class="queue-empty">No semantic judge runs recorded.</div>';
+  } else {
+    for (const run of report.evidence_judge_runs) {
+      const card = document.createElement("article");
+      card.className = `judge-run-card ${run.failed ? "failed" : run.stale ? "stale" : "current"}`;
+      const status = run.failed
+        ? "Failed"
+        : run.stale
+          ? "Stale after transcript revision"
+          : "Current";
+      card.innerHTML = `
+        <div class="judge-run-head">
+          <div>
+            <strong>${status}</strong>
+            <small>${run.judge_id}</small>
+          </div>
+          <button type="button" class="reevaluate-evidence">Re-evaluate</button>
+        </div>
+        <div class="judge-run-meta">
+          <span>answer ${run.answer_turn_id}</span>
+          <span>${run.observation_count} observation(s)</span>
+          <span>revision ${run.transcript_revision_count} → ${run.current_transcript_revision_count}</span>
+        </div>
+      `;
+      card.querySelector(".reevaluate-evidence").addEventListener(
+        "click",
+        () => reevaluateEvidence(report.session_id, run.answer_turn_id),
+      );
+      judgeRuns.appendChild(card);
+    }
   }
 
   const appeals = $("appeals");
@@ -272,6 +327,6 @@ $("refreshQueue").addEventListener("click", async () => {
   await Promise.all([loadQueue(), loadSummary()]);
 });
 $("showAll").addEventListener("change", loadQueue);
-loadQueue();
+Promise.all([loadQueue(), loadSummary()]);
 
 $("exportBundle").addEventListener("click", exportBundle);
