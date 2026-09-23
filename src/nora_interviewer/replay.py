@@ -8,10 +8,15 @@ from .models import EventType, InterviewEvent, SessionStatus, StrictModel
 class ReplayState(StrictModel):
     session_id: str
     status: SessionStatus = SessionStatus.CREATED
+    paused: bool = False
     interviewer_turn_ids: list[str] = Field(default_factory=list)
     candidate_turn_ids: list[str] = Field(default_factory=list)
     corrected_turn_ids: list[str] = Field(default_factory=list)
     appeal_ids: list[str] = Field(default_factory=list)
+    candidate_controls: list[str] = Field(default_factory=list)
+    opened_tool_ids: list[str] = Field(default_factory=list)
+    submitted_tool_ids: list[str] = Field(default_factory=list)
+    evaluated_tool_ids: list[str] = Field(default_factory=list)
     event_count: int = 0
 
 
@@ -35,12 +40,32 @@ def replay_events(session_id: str, events: list[InterviewEvent]) -> ReplayState:
             state.interviewer_turn_ids.append(event.turn_id)
         elif event.type is EventType.CANDIDATE_TURN and event.turn_id:
             state.candidate_turn_ids.append(event.turn_id)
+        elif event.type is EventType.CANDIDATE_CONTROL:
+            kind = str(event.payload.get("kind", ""))
+            if kind:
+                state.candidate_controls.append(kind)
+            if kind == "thinking_time":
+                state.paused = True
+            elif kind == "resume":
+                state.paused = False
         elif event.type is EventType.TRANSCRIPT_CORRECTED and event.turn_id:
             state.corrected_turn_ids.append(event.turn_id)
         elif event.type is EventType.APPEAL_SUBMITTED:
             appeal_id = str(event.payload.get("appeal_id", ""))
             if appeal_id:
                 state.appeal_ids.append(appeal_id)
+        elif event.type is EventType.TOOL_OPENED:
+            tool_id = str(event.payload.get("tool_id", ""))
+            if tool_id:
+                state.opened_tool_ids.append(tool_id)
+        elif event.type is EventType.TOOL_SUBMITTED:
+            tool_id = str(event.payload.get("tool_id", ""))
+            if tool_id:
+                state.submitted_tool_ids.append(tool_id)
+        elif event.type is EventType.TOOL_EVALUATED:
+            tool_id = str(event.payload.get("tool_id", ""))
+            if tool_id:
+                state.evaluated_tool_ids.append(tool_id)
         elif event.type is EventType.SESSION_COMPLETED:
             state.status = SessionStatus.COMPLETED
 
