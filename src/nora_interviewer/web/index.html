@@ -28,6 +28,7 @@
           <span>Evidence-linked</span>
           <span>Human-reviewed</span>
           <span>Provider-neutral</span>
+          <span>Voice-ready</span>
         </div>
       </div>
 
@@ -70,6 +71,13 @@ Technical communication</textarea></label>
           <p class="eyebrow">COMPETENCIES</p>
           <div class="chips" id="competencyChips"></div>
         </div>
+        <div class="voice-card">
+          <div>
+            <strong>Browser voice</strong>
+            <p>Optional local voice layer for the demo. Your browser handles speech recognition and synthesis.</p>
+          </div>
+          <button class="secondary" id="voiceBtn" type="button">Enable voice</button>
+        </div>
         <div class="audit-note">
           <strong>Auditable by design</strong>
           <p>Follow-ups retain their parent turn. Export the trace at any point for VoxRubric analysis.</p>
@@ -85,7 +93,8 @@ Technical communication</textarea></label>
         <div class="messages" id="messages" aria-live="polite"></div>
         <div class="typing hidden" id="typing"><span></span><span></span><span></span><em>Nora is thinking</em></div>
         <form class="composer" id="answerForm">
-          <textarea id="answerBox" rows="3" placeholder="Type your answer…  Ctrl/⌘ + Enter to send" required></textarea>
+          <button class="mic" id="micBtn" type="button" aria-label="Record answer" title="Record answer">●</button>
+          <textarea id="answerBox" rows="3" placeholder="Type or dictate your answer…  Ctrl/⌘ + Enter to send" required></textarea>
           <button class="send" type="submit" aria-label="Send answer">↑</button>
         </form>
       </section>
