@@ -34,6 +34,8 @@ class SystemCapabilities(StrictModel):
     streaming_stt_backend: str = "DisabledStreamingSpeechProvider"
     streaming_tts_enabled: bool = False
     streaming_tts_backend: str = "DisabledStreamingTtsProvider"
+    rubric_drafter_enabled: bool = False
+    rubric_drafter_backend: str = "DisabledRubricDrafter"
     voxrubric_export: bool = True
 
 
@@ -45,6 +47,7 @@ def describe_capabilities(
     service: InterviewService,
     streaming_speech_provider=None,
     streaming_tts_provider=None,
+    rubric_drafter=None,
 ) -> SystemCapabilities:
     judge = service.evidence_judge
     judge_backend = type(judge).__name__
@@ -57,6 +60,11 @@ def describe_capabilities(
         type(streaming_tts_provider).__name__
         if streaming_tts_provider is not None
         else "DisabledStreamingTtsProvider"
+    )
+    rubric_drafter_backend = (
+        type(rubric_drafter).__name__
+        if rubric_drafter is not None
+        else "DisabledRubricDrafter"
     )
 
     return SystemCapabilities(
@@ -83,6 +91,10 @@ def describe_capabilities(
             tts_backend != "DisabledStreamingTtsProvider"
         ),
         streaming_tts_backend=tts_backend,
+        rubric_drafter_enabled=(
+            rubric_drafter_backend != "DisabledRubricDrafter"
+        ),
+        rubric_drafter_backend=rubric_drafter_backend,
         sandbox_mode=os.getenv(
             "NORA_SANDBOX_MODE",
             "disabled",
