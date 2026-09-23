@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import Path
 
 from .models import InterviewSession, JobSpec
+from .rubric_drafting import RubricDraft
 from .storage import StoreConflictError
 
 
@@ -47,6 +48,17 @@ class SqliteStore:
                 """
                 CREATE TABLE IF NOT EXISTS jobs (
                     id TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                        DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS rubric_drafts (
+                    id TEXT PRIMARY KEY,
+                    approved_job_id TEXT,
                     payload TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                         DEFAULT CURRENT_TIMESTAMP
@@ -137,6 +149,135 @@ class SqliteStore:
         if payload is None:
             return None
         return JobSpec.model_validate_json(payload)
+
+    async def put_rubric_draft(
+        self,
+        draft: RubricDraft,
+    ) -> None:
+        payload = draft.model_dump_json()
+        async with self._lock:
+            await asyncio.to_thread(
+                self._put_rubric_draft_sync,
+                draft.id,
+                payload,
+            )
+
+    def _put_rubric_draft_sync(
+        self,
+        draft_id: str,
+        payload: str,
+    ) -> None:
+        try:
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO rubric_drafts(
+                        id,
+                        approved_job_id,
+                        payload,
+                        updated_at
+                    )
+                    VALUES (?, NULL, ?, CURRENT_TIMESTAMP)
+                    """,
+                    (draft_id, payload),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise StoreConflictError(
+                f"rubric draft {draft_id} already exists"
+            ) from exc
+
+    async def get_rubric_draft(
+        self,
+        draft_id: str,
+    ) -> RubricDraft | None:
+        payload = await asyncio.to_thread(
+            self._get_payload_sync,
+            "rubric_drafts",
+            draft_id,
+        )
+        if payload is None:
+            return None
+        return RubricDraft.model_validate_json(
+            payload
+        )
+
+    async def approve_rubric_draft(
+        self,
+        draft_id: str,
+        approved_draft: RubricDraft,
+        job: JobSpec,
+    ) -> None:
+        async with self._lock:
+            await asyncio.to_thread(
+                self._approve_rubric_draft_sync,
+                draft_id,
+                approved_draft.model_dump_json(),
+                job,
+            )
+
+    def _approve_rubric_draft_sync(
+        self,
+        draft_id: str,
+        approved_payload: str,
+        job: JobSpec,
+    ) -> None:
+        try:
+            with self._connect() as connection:
+                row = connection.execute(
+                    """
+                    SELECT approved_job_id
+                    FROM rubric_drafts
+                    WHERE id = ?
+                    """,
+                    (draft_id,),
+                ).fetchone()
+                if row is None:
+                    raise KeyError(
+                        f"rubric draft {draft_id} not found"
+                    )
+                if row[0] is not None:
+                    raise StoreConflictError(
+                        f"rubric draft {draft_id} is already approved"
+                    )
+
+                connection.execute(
+                    """
+                    INSERT INTO jobs(
+                        id,
+                        payload,
+                        updated_at
+                    )
+                    VALUES (?, ?, CURRENT_TIMESTAMP)
+                    """,
+                    (
+                        job.id,
+                        job.model_dump_json(),
+                    ),
+                )
+                cursor = connection.execute(
+                    """
+                    UPDATE rubric_drafts
+                    SET
+                        approved_job_id = ?,
+                        payload = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                      AND approved_job_id IS NULL
+                    """,
+                    (
+                        job.id,
+                        approved_payload,
+                        draft_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise StoreConflictError(
+                        f"rubric draft {draft_id} was approved concurrently"
+                    )
+        except sqlite3.IntegrityError as exc:
+            raise StoreConflictError(
+                f"job {job.id} already exists"
+            ) from exc
 
     async def put_session(
         self,
@@ -308,7 +449,11 @@ class SqliteStore:
         table: str,
         object_id: str,
     ) -> str | None:
-        if table not in {"jobs", "sessions"}:
+        if table not in {
+            "jobs",
+            "rubric_drafts",
+            "sessions",
+        }:
             raise ValueError("unsupported SQLite table")
         with self._connect() as connection:
             row = connection.execute(
