@@ -60,6 +60,15 @@ class AudioStreamManager:
             reconnect_token=token,
         )
 
+    def active_stream_count(self) -> int:
+        return sum(
+            not record.state.closed
+            for record in self._streams.values()
+        )
+
+    def tracked_stream_count(self) -> int:
+        return len(self._streams)
+
     def state(
         self,
         stream_id: str,
