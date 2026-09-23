@@ -75,6 +75,8 @@ class RecruiterSessionReport(StrictModel):
     pending_appeals: int = Field(ge=0)
     integrity_signals: int = Field(ge=0)
     unresolved_tools: int = Field(ge=0)
+    stale_evidence_runs: int = Field(ge=0)
+    failed_evidence_runs: int = Field(ge=0)
     transcript_revisions: int = Field(ge=0)
     requires_human_review: bool
     note: str = (
@@ -89,6 +91,8 @@ class ReviewDashboardSummary(StrictModel):
     pending_appeals: int = Field(ge=0)
     pending_integrity_signals: int = Field(ge=0)
     unresolved_tools: int = Field(ge=0)
+    stale_evidence_runs: int = Field(ge=0)
+    failed_evidence_runs: int = Field(ge=0)
     completed_sessions: int = Field(ge=0)
 
 
@@ -103,6 +107,8 @@ class ReviewQueueItem(StrictModel):
     pending_appeals: int = Field(ge=0)
     integrity_signals: int = Field(ge=0)
     unresolved_tools: int = Field(ge=0)
+    stale_evidence_runs: int = Field(ge=0)
+    failed_evidence_runs: int = Field(ge=0)
 
 
 def build_recruiter_report(
@@ -214,8 +220,16 @@ def build_recruiter_report(
                 )
             )
 
-    appeals = [
-        AppealReviewSummary(
+    stale_evidence_runs = sum(
+        item.stale
+        for item in evidence_judge_runs
+    )
+    failed_evidence_runs = sum(
+        item.failed
+        for item in evidence_judge_runs
+    )
+
+    appeals = [        AppealReviewSummary(
             id=item.id,
             message=item.message,
             turn_ids=item.turn_ids,
@@ -316,6 +330,8 @@ def build_recruiter_report(
         pending_appeals=pending_appeals,
         integrity_signals=integrity_signals,
         unresolved_tools=unresolved_tools,
+        stale_evidence_runs=stale_evidence_runs,
+        failed_evidence_runs=failed_evidence_runs,
         transcript_revisions=len(session.transcript_revisions),
         requires_human_review=requires_human_review,
     )
@@ -333,4 +349,6 @@ def to_queue_item(report: RecruiterSessionReport) -> ReviewQueueItem:
         pending_appeals=report.pending_appeals,
         integrity_signals=report.integrity_signals,
         unresolved_tools=report.unresolved_tools,
+        stale_evidence_runs=report.stale_evidence_runs,
+        failed_evidence_runs=report.failed_evidence_runs,
     )
