@@ -35,3 +35,21 @@ def test_review_console_and_assets_are_served():
     assert js.status_code == 200
     assert "/v1/review/queue" in js.text
     assert "/v1/review/sessions/" in js.text
+
+
+def test_job_studio_and_assets_are_served():
+    client = TestClient(app)
+
+    page = client.get("/studio")
+    assert page.status_code == 200
+    assert "Job & Rubric Studio" in page.text
+    assert "Human approval boundary" in page.text
+
+    css = client.get("/assets/studio.css")
+    assert css.status_code == 200
+    assert ".studio-grid" in css.text
+
+    js = client.get("/assets/studio.js")
+    assert js.status_code == 200
+    assert "/v1/rubrics/draft" in js.text
+    assert "/v1/jobs" in js.text
