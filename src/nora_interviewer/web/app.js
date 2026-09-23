@@ -25,6 +25,7 @@ const state = {
   serverTtsPlayer: null,
   serverSttClient: null,
   lastSpokenTurn: null,
+  voiceTelemetryKeys: new Set(),
 };
 
 function slugify(text, i) {
@@ -67,6 +68,39 @@ function browserSpeechRecognition() {
 function sendVoiceEvent(type, data = {}) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
   state.ws.send(JSON.stringify({type, data}));
+}
+
+function reportVoiceTransportSelected(
+  direction,
+  transport,
+  reason = null,
+) {
+  const key = `selected:${direction}:${transport}`;
+  if (state.voiceTelemetryKeys.has(key)) return;
+  state.voiceTelemetryKeys.add(key);
+  sendVoiceEvent(
+    "voice_transport_selected",
+    {
+      direction,
+      transport,
+      reason,
+    },
+  );
+}
+
+function reportVoiceFallback(direction, reason) {
+  const key = `fallback:${direction}`;
+  if (state.voiceTelemetryKeys.has(key)) return;
+  state.voiceTelemetryKeys.add(key);
+  sendVoiceEvent(
+    "voice_transport_fallback",
+    {
+      direction,
+      from_transport: "server",
+      to_transport: "browser",
+      reason: String(reason || "server transport unavailable"),
+    },
+  );
 }
 
 function stopPlaybackForBargeIn() {
@@ -181,6 +215,10 @@ function ensureServerSttClient() {
     onError: (error) => {
       state.listening = false;
       $("micBtn").classList.remove("listening");
+      reportVoiceFallback(
+        "stt",
+        error?.message || "server STT error",
+      );
       if (state.voiceTransport) {
         state.voiceTransport.streaming_stt_available = false;
         state.voiceTransport.stt_health = "degraded";
@@ -212,6 +250,11 @@ function browserSpeak(turn) {
 
   utterance.onstart = () => {
     state.activeTtsTurnId = turn.id;
+    reportVoiceTransportSelected(
+      "tts",
+      "browser",
+      "browser speech synthesis",
+    );
     sendVoiceEvent("voice_tts_started", {turn_id: turn.id});
   };
 
@@ -278,6 +321,10 @@ function ensureServerTtsPlayer() {
     },
     onError: (error, {hadAudio}) => {
       state.activeTtsTurnId = null;
+      reportVoiceFallback(
+        "tts",
+        error?.message || "server TTS error",
+      );
       setConnection(
         "Server voice error · browser fallback available",
         true,
@@ -301,6 +348,10 @@ function speak(turn) {
   const player = ensureServerTtsPlayer();
   if (player) {
     player.playTurn(turn).catch((error) => {
+      reportVoiceFallback(
+        "tts",
+        error?.message || "server TTS unavailable",
+      );
       setConnection(
         "Server voice unavailable · using browser voice",
         true,
@@ -310,6 +361,16 @@ function speak(turn) {
     return;
   }
 
+  if (
+    state.voiceTransport?.streaming_tts_enabled
+    && !(state.voiceTransport?.streaming_tts_available
+      ?? state.voiceTransport.streaming_tts_enabled)
+  ) {
+    reportVoiceFallback(
+      "tts",
+      state.voiceTransport.tts_health || "server TTS unavailable",
+    );
+  }
   browserSpeak(turn);
 }
 
@@ -379,6 +440,11 @@ function ensureRecognition() {
     $("micBtn").classList.add("listening");
 
     stopPlaybackForBargeIn();
+    reportVoiceTransportSelected(
+      "stt",
+      "browser",
+      "browser speech recognition",
+    );
     sendVoiceEvent("voice_speech_started");
     setConnection("Listening…");
   };
@@ -464,11 +530,26 @@ async function toggleMic() {
         state.voiceTransport.stt_health = "degraded";
       }
       state.serverSttClient = null;
+      reportVoiceFallback(
+        "stt",
+        error?.message || "server STT unavailable",
+      );
       setConnection(
         "Server microphone unavailable · using browser speech",
         true,
       );
     }
+  }
+
+  if (
+    state.voiceTransport?.streaming_stt_enabled
+    && !(state.voiceTransport?.streaming_stt_available
+      ?? state.voiceTransport.streaming_stt_enabled)
+  ) {
+    reportVoiceFallback(
+      "stt",
+      state.voiceTransport.stt_health || "server STT unavailable",
+    );
   }
 
   const recognition = ensureRecognition();
