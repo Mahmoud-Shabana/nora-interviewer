@@ -56,6 +56,9 @@ class RuleBasedBrain:
         if active is None:
             active = job.competencies[0].id
 
+        if session.asked_questions >= job.max_questions:
+            return self._close()
+
         word_count = len(_WORD.findall(latest.text))
         followups = session.followups_by_competency.get(active, 0)
         if word_count < 18 and followups < 1:
@@ -71,9 +74,6 @@ class RuleBasedBrain:
 
         if active not in session.covered_competencies:
             session.covered_competencies.append(active)
-
-        if session.asked_questions >= job.max_questions:
-            return self._close()
 
         if job.tool_templates and len(session.tools) < job.max_tools:
             used_templates = {
