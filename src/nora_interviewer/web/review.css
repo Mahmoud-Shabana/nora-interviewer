@@ -28,3 +28,8 @@
 .judge-run-head strong{display:block}.judge-run-head small{display:block;color:var(--muted);margin-top:4px}
 .reevaluate-evidence{border:1px solid #315c73;background:rgba(96,165,250,.08);color:#93c5fd;border-radius:9px;padding:8px 10px;cursor:pointer}
 .judge-run-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.judge-run-meta span{font-size:9px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 7px}
+
+.queue-meta{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0}.queue-meta span{font-size:9px;border-radius:999px;padding:3px 6px;border:1px solid var(--line)}
+.queue-meta .meta-danger{color:var(--danger);border-color:#59313a}.queue-meta .meta-warn{color:var(--warn);border-color:#594a2b}
+.summary-strip{grid-template-columns:repeat(8,minmax(0,1fr))}
+@media(max-width:1200px){.summary-strip{grid-template-columns:repeat(4,1fr)}}@media(max-width:700px){.summary-strip{grid-template-columns:repeat(2,1fr)}}
