@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 
+from .authn import DisabledPrincipalResolver, DevHeaderPrincipalResolver
 from .evidence_judge import DisabledEvidenceJudge, LLMEvidenceJudge
 from .providers.completion import OpenAICompatibleChatProvider
 from .providers.fallback import FallbackBrain
@@ -81,4 +82,32 @@ def build_evidence_judge():
 
     raise RuntimeError(
         f"Unsupported NORA_EVIDENCE_JUDGE_MODE: {mode}"
+    )
+
+
+def build_principal_resolver():
+    """Build the HTTP principal resolver.
+
+    disabled:
+        Backward-compatible local/demo mode. All requests are treated as the
+        trusted service principal.
+
+    dev-header:
+        Development-only role simulation through X-Nora-* headers.
+        Do not use this mode as a production authentication mechanism.
+    """
+
+    mode = os.getenv(
+        "NORA_AUTH_MODE",
+        "disabled",
+    ).strip().lower()
+
+    if mode == "disabled":
+        return DisabledPrincipalResolver()
+
+    if mode == "dev-header":
+        return DevHeaderPrincipalResolver()
+
+    raise RuntimeError(
+        f"Unsupported NORA_AUTH_MODE: {mode}"
     )
