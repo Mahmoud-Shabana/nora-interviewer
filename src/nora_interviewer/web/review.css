@@ -20,3 +20,11 @@
 .summary-strip>div{border:1px solid var(--line);border-radius:14px;padding:13px 14px;background:rgba(14,19,27,.94)}
 .summary-strip span{display:block;color:var(--muted);font-size:10px}.summary-strip strong{display:block;margin-top:4px;font-size:22px}
 @media(max-width:1100px){.summary-strip{grid-template-columns:repeat(3,1fr)}}@media(max-width:640px){.summary-strip{grid-template-columns:repeat(2,1fr)}}
+
+.judge-runs{display:grid;gap:8px}
+.judge-run-card{border:1px solid var(--line);border-radius:13px;padding:14px;background:var(--panel2)}
+.judge-run-card.current{border-color:#28543a}.judge-run-card.stale{border-color:#594a2b}.judge-run-card.failed{border-color:#59313a}
+.judge-run-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.judge-run-head strong{display:block}.judge-run-head small{display:block;color:var(--muted);margin-top:4px}
+.reevaluate-evidence{border:1px solid #315c73;background:rgba(96,165,250,.08);color:#93c5fd;border-radius:9px;padding:8px 10px;cursor:pointer}
+.judge-run-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.judge-run-meta span{font-size:9px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 7px}
