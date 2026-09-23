@@ -72,6 +72,9 @@ It separates:
 | Independent semantic Evidence Judge | ✅ Implemented (experimental) |
 | AI-assisted Job & Rubric Studio | ✅ Implemented with explicit recruiter approval |
 | Production streaming STT/TTS adapters | ✅ Generic WebSocket adapters implemented |
+| Browser → server streaming STT | ✅ PCM16 AudioWorklet client + browser fallback |
+| Voice provider circuit breaker | ✅ Health states, cooldown, fallback telemetry |
+| Privacy-minimized operations metrics | ✅ JSON snapshot + Prometheus exposition |
 | Durable local SQLite persistence | ✅ Implemented |
 | Role/permission authorization boundary | ✅ Implemented |
 | Signed JWT/JWKS authentication | ✅ Implemented |
@@ -354,6 +357,45 @@ Tracked events include:
 - `voice_tts_completed`
 - `voice_tts_cancelled`
 - `voice_barge_in`
+- `voice_transport_selected`
+- `voice_provider_failed`
+- `voice_transport_fallback`
+
+### Server speech transport
+
+The built-in browser room can now use Nora's server voice paths in both directions:
+
+```text
+microphone
+   ↓
+AudioWorklet / Web Audio
+   ↓  PCM16 · 16 kHz · ~20 ms frames
+/v1/ws/audio/{session}
+   ↓
+nora.stt.v1 provider
+   ↓
+partial/final transcript
+   ↓
+InterviewService
+
+Interview turn
+   ↓
+/v1/ws/tts/{session}
+   ↓
+nora.tts.v1 provider
+   ↓
+streaming PCM16 audio
+   ↓
+Web Audio playback
+```
+
+Server STT uses chunk acknowledgements and bounded in-flight frames for browser-side backpressure. If server speech is disabled or temporarily unavailable, the room can fall back to browser speech APIs when supported.
+
+### Provider health
+
+Streaming STT/TTS providers are wrapped by a runtime circuit breaker. Repeated failures move a provider from `degraded` to `open`; after cooldown, a new stream acts as a probe. A circuit is only healed after useful transcript/audio output, not merely after a successful socket connection.
+
+Voice transport selection, provider failure, and server→browser fallback are written to the session audit history and exported to VoxRubric.
 
 ## Barge-in
 
@@ -658,7 +700,9 @@ The browser UI currently includes:
 - practical-tool policy;
 - Arabic / English locale;
 - WebSocket conversation;
-- browser voice demo;
+- server streaming STT with browser recognition fallback;
+- server streaming TTS with browser synthesis fallback;
+- voice provider health-aware transport selection;
 - candidate control toolbar;
 - coding/artifact workbench;
 - public test display;
@@ -667,8 +711,8 @@ The browser UI currently includes:
 - post-tool continuation;
 - VoxRubric trace export.
 
-> Browser Web Speech remains a zero-key development transport.  
-> Production deployments can use the vendor-neutral `nora.stt.v1` and `nora.tts.v1` WebSocket adapters without changing Nora's interview semantics.
+> Browser speech APIs remain a zero-key fallback.  
+> The interview room can now capture microphone PCM and stream it through `nora.stt.v1`, while interviewer audio can stream through `nora.tts.v1`.
 
 ---
 
@@ -785,15 +829,22 @@ See [Data Retention](docs/RETENTION.md).
 
 ---
 
-# 🔎 System capabilities
+# 🔎 System capabilities & operations
 
 Protected operators can inspect active non-secret system configuration:
 
 ```text
 GET /v1/system/capabilities
+GET /v1/system/voice-health
+GET /v1/system/operations
+GET /v1/system/metrics
 ```
 
-The response reports implementation types and feature availability without exposing credentials or API keys.
+The capabilities endpoint reports implementation types and feature availability without exposing credentials or API keys.
+
+The operations endpoints expose privacy-minimized workload, review, stream, and provider-health counters. Prometheus labels are deliberately bounded and do **not** include candidate, job, session, turn, transcript, or artifact identifiers.
+
+See [Operations & Observability](docs/OPERATIONS.md).
 
 ---
 
@@ -929,6 +980,15 @@ export NORA_SANDBOX_IMAGE=python:3.12-alpine
 | POST | `/v1/sessions/{id}/decision-replay` |
 | GET | `/v1/sessions/{id}/voxrubric` |
 
+## System / operations
+
+| Method | Endpoint |
+|---|---|
+| GET | `/v1/system/capabilities` |
+| GET | `/v1/system/voice-health` |
+| GET | `/v1/system/operations` |
+| GET | `/v1/system/metrics` |
+
 ## Voice
 
 | Method | Endpoint |
@@ -963,6 +1023,11 @@ nora-interviewer/
 │   ├── replay.py              # Event replay
 │   ├── counterfactual.py      # Decision replay experiments
 │   ├── voice.py               # Realtime voice coordinator
+│   ├── voice_stream.py        # STT transport contracts
+│   ├── voice_stream_bridge.py # STT provider bridge
+│   ├── voice_output_bridge.py # TTS provider bridge
+│   ├── provider_health.py     # Voice circuit breaker
+│   ├── operations.py          # Privacy-minimized observability
 │   ├── tools.py               # Tool registry
 │   ├── tool_templates.py      # Trusted tool templates
 │   ├── coding.py              # Coding challenge manager/evaluator
@@ -1038,6 +1103,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Interview Protocol](docs/INTERVIEW_PROTOCOL.md)
 - [Candidate Rights](docs/CANDIDATE_RIGHTS.md)
 - [Realtime Voice Protocol](docs/VOICE_PROTOCOL.md)
+- [Operations & Observability](docs/OPERATIONS.md)
 - [Job & Rubric Studio](docs/RUBRIC_STUDIO.md)
 - [Independent Evidence Judge](docs/EVIDENCE_JUDGE.md)
 - [Authorization Model](docs/AUTHORIZATION.md)
@@ -1103,17 +1169,25 @@ Nora is intentionally conservative around high-stakes behavior.
 - [x] Explicit cancelled session lifecycle
 - [x] Tool shutdown on cancellation
 - [x] Realtime voice shutdown on cancellation
+- [x] Vendor-neutral streaming STT adapter
+- [x] Vendor-neutral streaming TTS adapter
+- [x] Server audio chunk transport + acknowledgements/backpressure
+- [x] Browser AudioWorklet PCM capture and server STT path
+- [x] Server TTS browser playback
+- [x] STT/TTS provider health + circuit breaker
+- [x] Audited server/browser voice fallback telemetry
+- [x] Privacy-minimized operations snapshot
+- [x] Protected Prometheus-compatible metrics
 
 ## 🚧 In progress
 
+- [ ] Browser STT automatic reconnect/resume
 - [ ] Semantic evidence calibration benchmark packs
 
 ## 🧭 Next
 
-- [ ] Production streaming STT adapter
-- [ ] Production streaming TTS adapter
-- [ ] VAD and audio chunk transport
-- [ ] Reconnect / backpressure handling
+- [ ] Voice activity detection (VAD)
+- [ ] Distributed request/session correlation tracing
 - [ ] Organization-specific OIDC login/session integration
 - [ ] encrypted object storage
 - [ ] retention controls
