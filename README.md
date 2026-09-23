@@ -70,11 +70,12 @@ It separates:
 | Barge-in / interruption flow | ✅ Implemented |
 | Replay / counterfactual analysis | ✅ Implemented |
 | Independent semantic Evidence Judge | ✅ Implemented (experimental) |
+| AI-assisted Job & Rubric Studio | ✅ Implemented with explicit recruiter approval |
 | Production streaming STT/TTS adapters | ✅ Generic WebSocket adapters implemented |
 | Durable local SQLite persistence | ✅ Implemented |
 | Role/permission authorization boundary | ✅ Implemented |
-| Production OIDC/JWT authentication | 🧭 Planned |
-| PostgreSQL multi-instance persistence | 🧭 Planned |
+| Signed JWT/JWKS authentication | ✅ Implemented |
+| PostgreSQL multi-instance persistence | ✅ Implemented |
 | Dry-run-first session retention | ✅ Implemented |
 | Tamper-evident audit hash chain | ✅ Implemented |
 | Protected system capabilities | ✅ Implemented |
@@ -551,6 +552,44 @@ See [Independent Evidence Judge](docs/EVIDENCE_JUDGE.md).
 
 ---
 
+# 🧩 Job & Rubric Studio
+
+Nora includes a recruiter workspace at:
+
+```text
+GET /studio
+```
+
+The workflow deliberately separates AI assistance from activation:
+
+```text
+job description
+      ↓
+AI rubric draft
+      ↓
+persisted draft_only artifact
+      ↓
+recruiter edits + review note
+      ↓
+explicit server-side approval
+      ↓
+JobSpec + RubricProvenance
+```
+
+An approved job records the originating draft, drafter identity, authenticated recruiter identity, approval timestamp, review note, and a structured summary of edits made between the AI draft and the approved configuration.
+
+API:
+
+```text
+POST /v1/rubrics/draft
+GET  /v1/rubrics/drafts/{draft_id}
+POST /v1/rubrics/drafts/{draft_id}/approve
+```
+
+See [Job & Rubric Studio](docs/RUBRIC_STUDIO.md).
+
+---
+
 # 🏗️ Architecture
 
 ## High-level system architecture
@@ -843,6 +882,14 @@ export NORA_SANDBOX_IMAGE=python:3.12-alpine
 
 # 🔌 API surface
 
+## Rubric authoring
+
+| Method | Endpoint |
+|---|---|
+| POST | `/v1/rubrics/draft` |
+| GET | `/v1/rubrics/drafts/{draft_id}` |
+| POST | `/v1/rubrics/drafts/{draft_id}/approve` |
+
 ## Core interview
 
 | Method | Endpoint |
@@ -991,6 +1038,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Interview Protocol](docs/INTERVIEW_PROTOCOL.md)
 - [Candidate Rights](docs/CANDIDATE_RIGHTS.md)
 - [Realtime Voice Protocol](docs/VOICE_PROTOCOL.md)
+- [Job & Rubric Studio](docs/RUBRIC_STUDIO.md)
 - [Independent Evidence Judge](docs/EVIDENCE_JUDGE.md)
 - [Authorization Model](docs/AUTHORIZATION.md)
 - [Storage Backends](docs/STORAGE.md)
