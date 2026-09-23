@@ -11,3 +11,7 @@ def render_interview_room() -> str:
 
 def render_review_console() -> str:
     return (WEB_DIR / "review.html").read_text(encoding="utf-8")
+
+
+def render_job_studio() -> str:
+    return (WEB_DIR / "studio.html").read_text(encoding="utf-8")
