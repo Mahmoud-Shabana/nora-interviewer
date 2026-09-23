@@ -50,7 +50,7 @@ from .voice import (
     VoiceSessionState,
     VoiceTurnResult,
 )
-from .web import WEB_DIR, render_interview_room
+from .web import WEB_DIR, render_interview_room, render_review_console
 
 API_VERSION = "0.4.0-dev"
 
@@ -108,6 +108,11 @@ app.mount("/assets", StaticFiles(directory=WEB_DIR), name="assets")
 @app.get("/", response_class=HTMLResponse)
 async def home() -> HTMLResponse:
     return HTMLResponse(render_interview_room())
+
+
+@app.get("/review", response_class=HTMLResponse)
+async def review_console() -> HTMLResponse:
+    return HTMLResponse(render_review_console())
 
 
 @app.get("/health")
