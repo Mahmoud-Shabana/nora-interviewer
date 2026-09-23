@@ -22,6 +22,19 @@ class CompetencyReviewSummary(StrictModel):
     source_types: list[str] = Field(default_factory=list)
 
 
+class EvidenceJudgeRunSummary(StrictModel):
+    id: str
+    judge_id: str
+    answer_turn_id: str
+    created_at: str
+    transcript_revision_count: int = Field(ge=0)
+    current_transcript_revision_count: int = Field(ge=0)
+    observation_count: int = Field(ge=0)
+    failed: bool
+    stale: bool
+    supersedes_run_id: str | None = None
+
+
 class ReviewReason(StrictModel):
     code: str = Field(min_length=1, max_length=120)
     summary: str = Field(min_length=1, max_length=500)
@@ -55,6 +68,7 @@ class RecruiterSessionReport(StrictModel):
     candidate_ref: str
     status: str
     competencies: list[CompetencyReviewSummary]
+    evidence_judge_runs: list[EvidenceJudgeRunSummary] = Field(default_factory=list)
     reasons: list[ReviewReason] = Field(default_factory=list)
     appeals: list[AppealReviewSummary] = Field(default_factory=list)
     integrity: list[IntegrityReviewSummary] = Field(default_factory=list)
@@ -135,6 +149,67 @@ def build_recruiter_report(
                     severity="attention",
                     summary=(
                         f"Competency {competency.id!r} lacks demonstrated or verified evidence."
+                    ),
+                )
+            )
+
+    revisions_by_turn: dict[str, int] = {}
+    for revision in session.transcript_revisions:
+        revisions_by_turn[revision.turn_id] = (
+            revisions_by_turn.get(revision.turn_id, 0) + 1
+        )
+
+    latest_run_by_answer = {}
+    for run in session.evidence_judge_runs:
+        current = latest_run_by_answer.get(run.answer_turn_id)
+        if current is None or run.created_at > current.created_at:
+            latest_run_by_answer[run.answer_turn_id] = run
+
+    evidence_judge_runs = []
+    for run in sorted(
+        latest_run_by_answer.values(),
+        key=lambda item: item.created_at,
+        reverse=True,
+    ):
+        current_revisions = revisions_by_turn.get(
+            run.answer_turn_id,
+            0,
+        )
+        stale = run.transcript_revision_count != current_revisions
+        evidence_judge_runs.append(
+            EvidenceJudgeRunSummary(
+                id=run.id,
+                judge_id=run.judge_id,
+                answer_turn_id=run.answer_turn_id,
+                created_at=run.created_at.isoformat(),
+                transcript_revision_count=run.transcript_revision_count,
+                current_transcript_revision_count=current_revisions,
+                observation_count=len(run.observation_ids),
+                failed=run.error is not None,
+                stale=stale,
+                supersedes_run_id=run.supersedes_run_id,
+            )
+        )
+
+        if run.error is not None:
+            reasons.append(
+                ReviewReason(
+                    code="evidence_judge_failed",
+                    severity="attention",
+                    summary=(
+                        f"Latest evidence judge run for answer "
+                        f"{run.answer_turn_id!r} failed and requires review."
+                    ),
+                )
+            )
+        elif stale:
+            reasons.append(
+                ReviewReason(
+                    code="evidence_reevaluation_needed",
+                    severity="attention",
+                    summary=(
+                        f"Answer {run.answer_turn_id!r} changed after its latest "
+                        "semantic evidence evaluation."
                     ),
                 )
             )
@@ -234,6 +309,7 @@ def build_recruiter_report(
         candidate_ref=session.candidate_ref,
         status=session.status.value,
         competencies=competencies,
+        evidence_judge_runs=evidence_judge_runs,
         reasons=reasons,
         appeals=appeals,
         integrity=integrity,
