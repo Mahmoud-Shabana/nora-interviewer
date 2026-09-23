@@ -96,6 +96,7 @@ service = InterviewService(
 voice = RealtimeVoiceCoordinator(service=service, store=store)
 principal_resolver = build_principal_resolver()
 retention = RetentionManager(store)
+review_service = ReviewService(store=store)
 streaming_speech_provider = build_streaming_speech_provider()
 audio_stream_manager = AudioStreamManager()
 audio_bridge = VoiceStreamBridge(
