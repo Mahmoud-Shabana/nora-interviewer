@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from time import perf_counter
 
 from fastapi import HTTPException
+from pydantic_core import to_jsonable_python
 
 from .audit import append_event, verify_event_chain
 from .coding import CodingChallengeManager, CodingChallengeRequest, CodingInterviewTool
@@ -813,7 +814,7 @@ class InterviewService:
                 "seq": event.seq,
                 "type": event.type.value,
                 "turn_id": event.turn_id,
-                "payload": event.payload,
+                "payload": to_jsonable_python(event.payload),
                 "created_at": event.created_at.isoformat(),
                 "hash_version": event.hash_version,
                 "prev_hash": event.prev_hash,
