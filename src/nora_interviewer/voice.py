@@ -11,6 +11,7 @@ from .audit import append_event
 from .models import EventType, SessionStatus, StrictModel, ToolInvocation, Turn
 from .service import InterviewService
 from .storage import Store, StoreConflictError
+from .vad import VadObservation
 
 
 class VoicePhase(str, Enum):
@@ -448,6 +449,29 @@ class RealtimeVoiceCoordinator:
             session,
             EventType.VOICE_TRANSPORT_FALLBACK,
             payload=event.model_dump(mode="json"),
+        )
+        await self._persist(session)
+
+    async def vad_endpoint(
+        self,
+        session_id: str,
+        observation: VadObservation,
+    ) -> None:
+        session = await self._session(session_id)
+        state = self._state_ref(session_id)
+        append_event(
+            session,
+            EventType.VOICE_VAD_ENDPOINT,
+            payload={
+                "generation": state.generation,
+                "state": observation.state.value,
+                "utterance_ms": observation.utterance_ms,
+                "silence_ms": observation.silence_ms,
+                "frame_ms": observation.frame_ms,
+                "auto_commit_recommended": (
+                    observation.auto_commit_recommended
+                ),
+            },
         )
         await self._persist(session)
 
