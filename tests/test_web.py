@@ -17,6 +17,21 @@ def test_interview_room_and_assets_are_served():
     js = client.get("/assets/app.js")
     assert js.status_code == 200
     assert "candidate_text" in js.text
+    assert "NoraServerSttClient" in js.text
+    assert "streaming_stt_available" in js.text
+
+    stt = client.get("/assets/server_stt.js")
+    assert stt.status_code == 200
+    assert "NoraServerSttClient" in stt.text
+    assert "AudioWorkletNode" in stt.text
+    assert 'type: "commit"' in stt.text
+
+    tts = client.get("/assets/server_tts.js")
+    assert tts.status_code == 200
+    assert "NoraServerTtsPlayer" in tts.text
+
+    assert "/assets/server_stt.js" in home.text
+    assert "/assets/server_tts.js" in home.text
 
 
 def test_review_console_and_assets_are_served():
