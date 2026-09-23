@@ -34,6 +34,7 @@ class SystemCapabilities(StrictModel):
     streaming_stt_backend: str = "DisabledStreamingSpeechProvider"
     streaming_tts_enabled: bool = False
     streaming_tts_backend: str = "DisabledStreamingTtsProvider"
+    voice_provider_health: bool = True
     rubric_drafter_enabled: bool = False
     rubric_drafter_backend: str = "DisabledRubricDrafter"
     rubric_draft_persistence: bool = True
@@ -54,14 +55,24 @@ def describe_capabilities(
 ) -> SystemCapabilities:
     judge = service.evidence_judge
     judge_backend = type(judge).__name__
-    speech_backend = (
-        type(streaming_speech_provider).__name__
+    speech_object = (
+        getattr(streaming_speech_provider, "inner", streaming_speech_provider)
         if streaming_speech_provider is not None
+        else None
+    )
+    tts_object = (
+        getattr(streaming_tts_provider, "inner", streaming_tts_provider)
+        if streaming_tts_provider is not None
+        else None
+    )
+    speech_backend = (
+        type(speech_object).__name__
+        if speech_object is not None
         else "DisabledStreamingSpeechProvider"
     )
     tts_backend = (
-        type(streaming_tts_provider).__name__
-        if streaming_tts_provider is not None
+        type(tts_object).__name__
+        if tts_object is not None
         else "DisabledStreamingTtsProvider"
     )
     rubric_drafter_backend = (
