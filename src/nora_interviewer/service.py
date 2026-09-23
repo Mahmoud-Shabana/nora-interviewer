@@ -18,6 +18,7 @@ from .models import (
     CandidateControlResult,
     CreateSession,
     EvidenceObservation,
+    EvidenceState,
     EventType,
     IntegritySignal,
     IntegritySignalRequest,
@@ -466,6 +467,39 @@ class InterviewService:
                 "summary": evaluation.summary,
             },
         )
+
+        if evaluation.passed is not None:
+            state = (
+                EvidenceState.DEMONSTRATED
+                if evaluation.passed
+                else EvidenceState.INSUFFICIENT
+            )
+            for competency_id in invocation.competency_tags:
+                observation = EvidenceObservation(
+                    competency_id=competency_id,
+                    turn_id=artifact_turn.id,
+                    state=state,
+                    confidence=1.0,
+                    note=evaluation.summary,
+                    source=f"tool:{invocation.kind.value}",
+                )
+                item = EvidenceGraph.apply_observation(
+                    session,
+                    job,
+                    observation,
+                )
+                append_event(
+                    session,
+                    EventType.EVIDENCE_OBSERVED,
+                    turn=artifact_turn,
+                    payload={
+                        "evidence_id": item.id,
+                        "competency_id": competency_id,
+                        "state": state.value,
+                        "confidence": observation.confidence,
+                        "source": observation.source,
+                    },
+                )
 
         started = perf_counter()
         decision = await self.brain.after_tool(
