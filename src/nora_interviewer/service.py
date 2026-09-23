@@ -1234,6 +1234,10 @@ class InterviewService:
                     key: value.model_dump(mode="json")
                     for key, value in session.evidence_graph.items()
                 },
+                "evidence_judge_runs": [
+                    run.model_dump(mode="json")
+                    for run in session.evidence_judge_runs
+                ],
                 "transcript_revisions": [
                     revision.model_dump(mode="json")
                     for revision in session.transcript_revisions
