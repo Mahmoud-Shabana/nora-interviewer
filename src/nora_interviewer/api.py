@@ -49,6 +49,7 @@ from .models import (
     InterviewEvent,
     InterviewSession,
     JobSpec,
+    ReviewAssignment,
     SessionStep,
     ToolInvocation,
     ToolStep,
@@ -61,6 +62,8 @@ from .replay import ReplayState
 from .review import (
     EvidenceReevaluationQueueItem,
     RecruiterSessionReport,
+    ReviewAssignmentActionRequest,
+    ReviewAssignmentCreateRequest,
     ReviewDashboardSummary,
     ReviewQueueItem,
 )
@@ -529,6 +532,115 @@ async def review_queue(
     return await review_service.queue(
         requires_review_only=requires_review_only,
         job_id=job_id,
+    )
+
+
+@app.post(
+    "/v1/review/sessions/{session_id}/assignments",
+    response_model=ReviewAssignment,
+    status_code=201,
+)
+async def assign_review(
+    session_id: str,
+    request: ReviewAssignmentCreateRequest,
+    if_match: str | None = Header(default=None, alias="If-Match"),
+    principal: Principal = Depends(current_principal),
+) -> ReviewAssignment:
+    session = await require_session_permission(
+        session_id,
+        principal,
+        Permission.ASSIGN_REVIEW,
+    )
+    enforce_session_precondition(
+        session,
+        if_match,
+    )
+    return await review_service.assign(
+        session_id,
+        request,
+        assigned_by=principal.id,
+    )
+
+
+@app.post(
+    "/v1/review/sessions/{session_id}/assignments/{assignment_id}/start",
+    response_model=ReviewAssignment,
+)
+async def start_review_assignment(
+    session_id: str,
+    assignment_id: str,
+    if_match: str | None = Header(default=None, alias="If-Match"),
+    principal: Principal = Depends(current_principal),
+) -> ReviewAssignment:
+    session = await require_session_permission(
+        session_id,
+        principal,
+        Permission.WORK_REVIEW_ASSIGNMENT,
+    )
+    enforce_session_precondition(
+        session,
+        if_match,
+    )
+    return await review_service.start_assignment(
+        session_id,
+        assignment_id,
+        reviewer_id=principal.id,
+    )
+
+
+@app.post(
+    "/v1/review/sessions/{session_id}/assignments/{assignment_id}/complete",
+    response_model=ReviewAssignment,
+)
+async def complete_review_assignment(
+    session_id: str,
+    assignment_id: str,
+    request: ReviewAssignmentActionRequest,
+    if_match: str | None = Header(default=None, alias="If-Match"),
+    principal: Principal = Depends(current_principal),
+) -> ReviewAssignment:
+    session = await require_session_permission(
+        session_id,
+        principal,
+        Permission.WORK_REVIEW_ASSIGNMENT,
+    )
+    enforce_session_precondition(
+        session,
+        if_match,
+    )
+    return await review_service.complete_assignment(
+        session_id,
+        assignment_id,
+        request,
+        reviewer_id=principal.id,
+    )
+
+
+@app.post(
+    "/v1/review/sessions/{session_id}/assignments/{assignment_id}/cancel",
+    response_model=ReviewAssignment,
+)
+async def cancel_review_assignment(
+    session_id: str,
+    assignment_id: str,
+    request: ReviewAssignmentActionRequest,
+    if_match: str | None = Header(default=None, alias="If-Match"),
+    principal: Principal = Depends(current_principal),
+) -> ReviewAssignment:
+    session = await require_session_permission(
+        session_id,
+        principal,
+        Permission.CANCEL_REVIEW_ASSIGNMENT,
+    )
+    enforce_session_precondition(
+        session,
+        if_match,
+    )
+    return await review_service.cancel_assignment(
+        session_id,
+        assignment_id,
+        request,
+        cancelled_by=principal.id,
     )
 
 
