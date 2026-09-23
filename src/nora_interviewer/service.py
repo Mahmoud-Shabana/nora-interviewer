@@ -393,8 +393,8 @@ class InterviewService:
             and result.target_turn_id
             and request.text
         ):
-            await self.correct_transcript(
-                session_id,
+            self._apply_transcript_correction(
+                session,
                 TranscriptCorrectionRequest(
                     turn_id=result.target_turn_id,
                     corrected_text=request.text,
@@ -402,7 +402,7 @@ class InterviewService:
                 ),
             )
 
-        await self.store.put_session(session)
+        await self._persist_session(session)
         return result
 
     async def _open_requested_tool(
@@ -460,7 +460,11 @@ class InterviewService:
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
 
-        return await self.open_tool(session.id, invocation)
+        return self._append_tool(
+            session,
+            job,
+            invocation,
+        )
 
     async def open_coding_challenge(
         self,
@@ -479,14 +483,20 @@ class InterviewService:
                 raise HTTPException(400, "Coding challenge references unknown opening turn")
 
         invocation = self.coding_challenges.create(request)
-        return await self.open_tool(session_id, invocation)
+        self._append_tool(
+            session,
+            job,
+            invocation,
+        )
+        await self._persist_session(session)
+        return invocation
 
-    async def open_tool(
+    def _append_tool(
         self,
-        session_id: str,
+        session: InterviewSession,
+        job: JobSpec,
         invocation: ToolInvocation,
     ) -> ToolInvocation:
-        session, job = await self._get(session_id)
         if session.status is SessionStatus.COMPLETED:
             raise HTTPException(409, "Interview is already complete")
         if any(tool.id == invocation.id for tool in session.tools):
@@ -513,7 +523,20 @@ class InterviewService:
                 "opened_from_turn_id": invocation.opened_from_turn_id,
             },
         )
-        await self.store.put_session(session)
+        return invocation
+
+    async def open_tool(
+        self,
+        session_id: str,
+        invocation: ToolInvocation,
+    ) -> ToolInvocation:
+        session, job = await self._get(session_id)
+        self._append_tool(
+            session,
+            job,
+            invocation,
+        )
+        await self._persist_session(session)
         return invocation
 
     async def submit_tool(
@@ -664,12 +687,11 @@ class InterviewService:
             status=session.status,
         )
 
-    async def correct_transcript(
+    def _apply_transcript_correction(
         self,
-        session_id: str,
+        session: InterviewSession,
         request: TranscriptCorrectionRequest,
     ) -> TranscriptRevision:
-        session, _ = await self._get(session_id)
         turn = next((t for t in session.turns if t.id == request.turn_id), None)
         if turn is None:
             raise HTTPException(404, "Turn not found")
@@ -699,7 +721,19 @@ class InterviewService:
                 "reason": revision.reason,
             },
         )
-        await self.store.put_session(session)
+        return revision
+
+    async def correct_transcript(
+        self,
+        session_id: str,
+        request: TranscriptCorrectionRequest,
+    ) -> TranscriptRevision:
+        session, _ = await self._get(session_id)
+        revision = self._apply_transcript_correction(
+            session,
+            request,
+        )
+        await self._persist_session(session)
         return revision
 
     async def submit_appeal(
