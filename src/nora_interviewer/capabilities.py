@@ -27,6 +27,7 @@ class SystemCapabilities(StrictModel):
     recruiter_review_console: bool = True
     session_etags: bool = True
     session_cancellation: bool = True
+    jwt_jwks_auth: bool = False
     evidence_judge_ensemble: bool = False
     voxrubric_export: bool = True
 
@@ -45,6 +46,10 @@ def describe_capabilities(
         api_version=api_version,
         storage_backend=type(store).__name__,
         auth_resolver=type(principal_resolver).__name__,
+        jwt_jwks_auth=(
+            type(principal_resolver).__name__
+            == "JwtJwksPrincipalResolver"
+        ),
         interview_brain=type(service.brain).__name__,
         evidence_judge_enabled=(
             judge.judge_id != "disabled"
