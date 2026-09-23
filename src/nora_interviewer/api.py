@@ -936,9 +936,27 @@ async def voice_transport_capabilities(
         )
         != "disabled"
     )
+    stt_health = await voice_provider_health.snapshot(
+        "streaming_stt"
+    )
+    tts_health = await voice_provider_health.snapshot(
+        "streaming_tts"
+    )
+    stt_available = (
+        stt_enabled
+        and stt_health.state.value != "open"
+    )
+    tts_available = (
+        tts_enabled
+        and tts_health.state.value != "open"
+    )
     return VoiceTransportCapabilities(
         streaming_stt_enabled=stt_enabled,
+        streaming_stt_available=stt_available,
         streaming_tts_enabled=tts_enabled,
+        streaming_tts_available=tts_available,
+        stt_health=stt_health.state,
+        tts_health=tts_health.state,
         stt_protocol=(
             "nora.stt.v1"
             if stt_enabled
