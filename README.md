@@ -70,7 +70,7 @@ It separates:
 | Barge-in / interruption flow | ✅ Implemented |
 | Replay / counterfactual analysis | ✅ Implemented |
 | Independent semantic Evidence Judge | ✅ Implemented (experimental) |
-| Production streaming STT/TTS adapters | 🧭 Planned |
+| Production streaming STT/TTS adapters | ✅ Generic WebSocket adapters implemented |
 | Durable local SQLite persistence | ✅ Implemented |
 | Role/permission authorization boundary | ✅ Implemented |
 | Production OIDC/JWT authentication | 🧭 Planned |
@@ -628,8 +628,8 @@ The browser UI currently includes:
 - post-tool continuation;
 - VoxRubric trace export.
 
-> Browser Web Speech is a zero-key development transport.  
-> Production STT/TTS providers can replace it without changing Nora's interview semantics.
+> Browser Web Speech remains a zero-key development transport.  
+> Production deployments can use the vendor-neutral `nora.stt.v1` and `nora.tts.v1` WebSocket adapters without changing Nora's interview semantics.
 
 ---
 
@@ -789,6 +789,20 @@ http://localhost:8000
 docker compose up --build
 ```
 
+## Optional production voice transport
+
+```bash
+pip install -e '.[voice]'
+
+export NORA_STREAMING_STT_MODE=websocket-json
+export NORA_STREAMING_STT_URL=wss://stt.example/v1/stream
+
+export NORA_STREAMING_TTS_MODE=websocket-json
+export NORA_STREAMING_TTS_URL=wss://tts.example/v1/stream
+```
+
+See [Realtime Voice Protocol](docs/VOICE_PROTOCOL.md) for the `nora.stt.v1` and `nora.tts.v1` contracts.
+
 ---
 
 # ⚙️ Configuration
@@ -880,6 +894,8 @@ export NORA_SANDBOX_IMAGE=python:3.12-alpine
 | POST | `/v1/sessions/{id}/voice/tts-completed` |
 | POST | `/v1/sessions/{id}/voice/tts-cancelled` |
 | WS | `/v1/ws/interviews/{id}` |
+| WS | `/v1/ws/audio/{id}` |
+| WS | `/v1/ws/tts/{id}` |
 
 ---
 
