@@ -31,6 +31,7 @@ from .models import (
     ToolEvaluation,
     ToolInvocation,
     ToolStatus,
+    ToolStep,
     ToolSubmission,
     ToolSubmissionRequest,
     TranscriptCorrectionRequest,
@@ -387,8 +388,11 @@ class InterviewService:
         session_id: str,
         tool_id: str,
         request: ToolSubmissionRequest,
-    ) -> ToolEvaluation:
+    ) -> ToolStep:
         session, job = await self._get(session_id)
+        if session.status is SessionStatus.COMPLETED:
+            raise HTTPException(409, "Interview is already complete")
+
         invocation = next((tool for tool in session.tools if tool.id == tool_id), None)
         if invocation is None:
             raise HTTPException(404, "Tool invocation not found")
@@ -405,6 +409,30 @@ class InterviewService:
                 "tool_id": tool_id,
                 "submission_id": submission.id,
                 "artifact_keys": sorted(submission.content.keys()),
+            },
+        )
+
+        artifact_turn = Turn(
+            speaker=Speaker.CANDIDATE,
+            text=f"[{invocation.kind.value} artifact submitted]",
+            parent_turn_id=invocation.opened_from_turn_id,
+            competency_tags=invocation.competency_tags,
+            metadata={
+                "artifact": True,
+                "tool_id": invocation.id,
+                "tool_submission_id": submission.id,
+                "tool_kind": invocation.kind.value,
+            },
+        )
+        session.turns.append(artifact_turn)
+        append_event(
+            session,
+            EventType.CANDIDATE_TURN,
+            turn=artifact_turn,
+            payload={
+                "artifact": True,
+                "tool_id": invocation.id,
+                "submission_id": submission.id,
             },
         )
 
@@ -427,8 +455,46 @@ class InterviewService:
                 "summary": evaluation.summary,
             },
         )
+
+        started = perf_counter()
+        decision = await self.brain.after_tool(
+            session,
+            job,
+            invocation,
+            submission,
+            evaluation,
+        )
+        latency_ms = max(0, round((perf_counter() - started) * 1000))
+        interviewer = self._apply_decision(
+            session,
+            decision,
+            latency_ms=latency_ms,
+        )
+        next_tool = await self._open_requested_tool(
+            session,
+            job,
+            decision,
+            opened_from_turn_id=interviewer.id,
+        )
+
+        if decision.parent_turn_id and decision.competency_tags:
+            key = decision.competency_tags[0]
+            session.followups_by_competency[key] = (
+                session.followups_by_competency.get(key, 0) + 1
+            )
+
+        if decision.completes_interview:
+            session.status = SessionStatus.COMPLETED
+            append_event(session, EventType.SESSION_COMPLETED)
+
         await self.store.put_session(session)
-        return evaluation
+        return ToolStep(
+            tool_id=tool_id,
+            evaluation=evaluation,
+            interviewer_turn=interviewer,
+            next_tool_invocation=next_tool,
+            status=session.status,
+        )
 
     async def correct_transcript(
         self,
