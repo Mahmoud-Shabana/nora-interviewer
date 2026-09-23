@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from time import perf_counter
 
 from fastapi import HTTPException
@@ -235,6 +236,8 @@ class InterviewService:
 
         if decision.completes_interview:
             session.status = SessionStatus.COMPLETED
+            if session.completed_at is None:
+                session.completed_at = datetime.now(timezone.utc)
             append_event(session, EventType.SESSION_COMPLETED)
 
         await self.store.put_session(session)
@@ -610,6 +613,8 @@ class InterviewService:
 
         if decision.completes_interview:
             session.status = SessionStatus.COMPLETED
+            if session.completed_at is None:
+                session.completed_at = datetime.now(timezone.utc)
             append_event(session, EventType.SESSION_COMPLETED)
 
         await self.store.put_session(session)
