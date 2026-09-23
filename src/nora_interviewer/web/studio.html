@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nora Job Studio</title>
+  <link rel="stylesheet" href="/assets/studio.css">
+</head>
+<body>
+  <main class="studio-shell">
+    <header class="studio-topbar">
+      <div>
+        <p class="eyebrow">NORA · RECRUITER WORKSPACE</p>
+        <h1>Job & Rubric Studio</h1>
+        <p>
+          Draft a job-related interview rubric with AI assistance, inspect every
+          competency, edit the standardized anchor questions, then explicitly
+          approve the result by creating the job.
+        </p>
+      </div>
+      <nav>
+        <a href="/">Candidate room</a>
+        <a href="/review">Review console</a>
+      </nav>
+    </header>
+
+    <section class="notice">
+      <strong>Human approval boundary</strong>
+      <span>
+        AI-generated rubrics remain <code>draft_only</code>. Nora never activates
+        a generated rubric until a recruiter reviews it and clicks Create job.
+      </span>
+    </section>
+
+    <section class="studio-grid">
+      <form id="draftForm" class="panel setup-panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">SOURCE</span>
+            <h2>Role context</h2>
+          </div>
+        </div>
+
+        <label>
+          Role title
+          <input id="jobTitle" required minlength="2" value="Backend Engineer">
+        </label>
+
+        <label>
+          Job description
+          <textarea id="jobDescription" required minlength="20" rows="12">Build reliable Python services, diagnose production incidents, reason about distributed systems trade-offs, and communicate engineering decisions with evidence.</textarea>
+        </label>
+
+        <label>
+          Recruiter notes
+          <textarea id="recruiterNotes" rows="4" placeholder="Optional constraints or context for the draft."></textarea>
+        </label>
+
+        <div class="inline-fields">
+          <label>
+            Locale
+            <select id="locale">
+              <option value="en">English</option>
+              <option value="ar-SA">Arabic · Saudi</option>
+              <option value="ar-EG">Arabic · Egyptian</option>
+            </select>
+          </label>
+          <label>
+            Competencies
+            <input id="competencyCount" type="number" min="3" max="12" value="6">
+          </label>
+          <label>
+            Max questions
+            <input id="maxQuestions" type="number" min="3" max="30" value="10">
+          </label>
+          <label>
+            Anchor ratio
+            <input id="anchorRatio" type="number" min="0.2" max="0.8" step="0.05" value="0.4">
+          </label>
+        </div>
+
+        <button id="draftButton" class="primary" type="submit">
+          Draft interview rubric
+        </button>
+        <p id="draftStatus" class="status"></p>
+      </form>
+
+      <section class="panel editor-panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">HUMAN REVIEW</span>
+            <h2>Rubric draft</h2>
+          </div>
+          <span id="draftBadge" class="draft-badge">No draft</span>
+        </div>
+
+        <div id="emptyDraft" class="empty-state">
+          <span>◇</span>
+          <h3>No rubric draft yet</h3>
+          <p>
+            Generate a draft from the role description. Every competency remains
+            editable before job creation.
+          </p>
+        </div>
+
+        <div id="draftEditor" class="hidden">
+          <div id="warnings" class="warnings"></div>
+          <div id="competencyEditor" class="competency-editor"></div>
+
+          <div class="approval-box">
+            <label class="approval-check">
+              <input id="approvalCheck" type="checkbox">
+              <span>
+                I reviewed the competency definitions, weights, and anchor
+                questions and want to create this job configuration.
+              </span>
+            </label>
+            <button id="createJobButton" class="primary" type="button" disabled>
+              Create reviewed job
+            </button>
+            <p id="createStatus" class="status"></p>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script src="/assets/studio.js"></script>
+</body>
+</html>
