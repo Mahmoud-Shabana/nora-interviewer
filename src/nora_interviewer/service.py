@@ -27,6 +27,7 @@ from .models import (
     CandidateControlResult,
     CancelSessionRequest,
     CreateSession,
+    EvidenceJudgeRun,
     EvidenceObservation,
     EvidenceState,
     EventType,
@@ -313,13 +314,29 @@ class InterviewService:
         job: JobSpec,
         question: Turn,
         answer: Turn,
-    ) -> None:
+        supersede_existing: bool = False,
+        supersedes_run_id: str | None = None,
+    ) -> EvidenceJudgeRun | None:
         if self.evidence_judge.judge_id == "disabled":
-            return
+            return None
 
         competency_ids = list(dict.fromkeys(question.competency_tags))
         if not competency_ids:
-            return
+            return None
+
+        revision_count = sum(
+            1
+            for revision in session.transcript_revisions
+            if revision.turn_id == answer.id
+        )
+        run = EvidenceJudgeRun(
+            judge_id=self.evidence_judge.judge_id,
+            question_turn_id=question.id,
+            answer_turn_id=answer.id,
+            competency_ids=competency_ids,
+            transcript_revision_count=revision_count,
+            supersedes_run_id=supersedes_run_id,
+        )
 
         try:
             response = await self.evidence_judge.evaluate(
@@ -328,13 +345,38 @@ class InterviewService:
                 job=job,
                 competency_ids=competency_ids,
             )
-            observations = GroundedEvidenceGate.validate(
+            raw_observations = GroundedEvidenceGate.validate(
                 answer=answer,
                 response=response,
                 judge_id=self.evidence_judge.judge_id,
             )
+            observations = [
+                observation.model_copy(
+                    update={"judge_run_id": run.id}
+                )
+                for observation in raw_observations
+            ]
+
+            if supersede_existing:
+                superseded = EvidenceGraph.supersede_semantic_evidence_for_turn(
+                    session,
+                    turn_id=answer.id,
+                )
+                for item in superseded:
+                    append_event(
+                        session,
+                        EventType.EVIDENCE_SUPERSEDED,
+                        turn=answer,
+                        payload={
+                            "evidence_id": item.id,
+                            "judge_run_id": item.judge_run_id,
+                            "answer_turn_id": answer.id,
+                            "superseded_by_run_id": run.id,
+                        },
+                    )
 
             audit = response.audit
+            run.audit = audit
             if audit.get("kind") == "evidence_judge_ensemble":
                 disagreements = [
                     item
@@ -353,6 +395,7 @@ class InterviewService:
                         EventType.EVIDENCE_JUDGE_DISAGREEMENT,
                         turn=answer,
                         payload={
+                            "judge_run_id": run.id,
                             "judge_id": self.evidence_judge.judge_id,
                             "question_turn_id": question.id,
                             "answer_turn_id": answer.id,
@@ -373,12 +416,14 @@ class InterviewService:
                     job,
                     observation,
                 )
+                run.observation_ids.append(item.id)
                 append_event(
                     session,
                     EventType.EVIDENCE_OBSERVED,
                     turn=answer,
                     payload={
                         "evidence_id": item.id,
+                        "judge_run_id": run.id,
                         "competency_id": observation.competency_id,
                         "state": observation.state.value,
                         "confidence": observation.confidence,
@@ -386,24 +431,63 @@ class InterviewService:
                         "source": observation.source,
                     },
                 )
+
+            session.evidence_judge_runs.append(run)
+            append_event(
+                session,
+                EventType.EVIDENCE_JUDGE_RUN_RECORDED,
+                turn=answer,
+                payload={
+                    "judge_run_id": run.id,
+                    "judge_id": run.judge_id,
+                    "question_turn_id": run.question_turn_id,
+                    "answer_turn_id": run.answer_turn_id,
+                    "observation_ids": run.observation_ids,
+                    "transcript_revision_count": run.transcript_revision_count,
+                    "supersedes_run_id": run.supersedes_run_id,
+                    "failed": False,
+                },
+            )
+            return run
+
         except (
             EvidenceJudgeError,
             ValueError,
             TypeError,
         ) as exc:
+            run.error_type = type(exc).__name__
+            run.error = str(exc)[:2000]
+            session.evidence_judge_runs.append(run)
             append_event(
                 session,
                 EventType.EVIDENCE_JUDGE_FAILED,
                 turn=answer,
                 payload={
+                    "judge_run_id": run.id,
                     "judge_id": self.evidence_judge.judge_id,
                     "question_turn_id": question.id,
                     "answer_turn_id": answer.id,
                     "competency_ids": competency_ids,
-                    "error_type": type(exc).__name__,
-                    "error": str(exc)[:1000],
+                    "error_type": run.error_type,
+                    "error": run.error,
                 },
             )
+            append_event(
+                session,
+                EventType.EVIDENCE_JUDGE_RUN_RECORDED,
+                turn=answer,
+                payload={
+                    "judge_run_id": run.id,
+                    "judge_id": run.judge_id,
+                    "question_turn_id": run.question_turn_id,
+                    "answer_turn_id": run.answer_turn_id,
+                    "observation_ids": [],
+                    "transcript_revision_count": run.transcript_revision_count,
+                    "supersedes_run_id": run.supersedes_run_id,
+                    "failed": True,
+                },
+            )
+            return run
 
     async def candidate_control(
         self,
@@ -781,6 +865,23 @@ class InterviewService:
                 "reason": revision.reason,
             },
         )
+
+        superseded = EvidenceGraph.supersede_semantic_evidence_for_turn(
+            session,
+            turn_id=turn.id,
+        )
+        for item in superseded:
+            append_event(
+                session,
+                EventType.EVIDENCE_SUPERSEDED,
+                turn=turn,
+                payload={
+                    "evidence_id": item.id,
+                    "judge_run_id": item.judge_run_id,
+                    "answer_turn_id": turn.id,
+                    "reason": "transcript_corrected",
+                },
+            )
         return revision
 
     async def correct_transcript(
