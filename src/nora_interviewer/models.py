@@ -16,6 +16,7 @@ class SessionStatus(str, Enum):
     CREATED = "created"
     RUNNING = "running"
     COMPLETED = "completed"
+    CANCELLED = "cancelled"
 
 
 class Speaker(str, Enum):
@@ -107,6 +108,7 @@ class EventType(str, Enum):
     VOICE_TTS_CANCELLED = "voice_tts_cancelled"
     VOICE_BARGE_IN = "voice_barge_in"
     SESSION_COMPLETED = "session_completed"
+    SESSION_CANCELLED = "session_cancelled"
 
 
 class JobToolTemplate(StrictModel):
@@ -333,6 +335,8 @@ class InterviewSession(StrictModel):
         default_factory=lambda: datetime.now(timezone.utc)
     )
     completed_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    cancellation_reason: str | None = Field(default=None, max_length=2000)
     job_id: str
     candidate_ref: str
     locale: str
@@ -356,6 +360,10 @@ class InterviewSession(StrictModel):
 
 class CandidateResponse(StrictModel):
     text: str = Field(min_length=1, max_length=20_000)
+
+
+class CancelSessionRequest(StrictModel):
+    reason: str = Field(min_length=2, max_length=2000)
 
 
 class AgentToolRequest(StrictModel):
