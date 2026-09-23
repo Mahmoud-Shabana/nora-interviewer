@@ -116,3 +116,8 @@ textarea{resize:vertical}
 .tool-actions{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 18px 16px;color:var(--muted);font-size:11px}
 .tool-submit{width:auto;min-width:170px;gap:18px}.tool-result{margin:0 18px 18px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;color:var(--soft);font-size:12px;background:rgba(139,233,199,.04)}
 .tool-reopen{align-self:flex-start;margin:12px 20px 0;padding:8px 11px;border:1px solid var(--line);background:#121821;color:var(--accent);border-radius:999px;font-size:11px}
+
+.tool-policy-picker{margin:16px 0;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.018)}
+.picker-head{margin-bottom:9px}.picker-head strong,.picker-head small{display:block}.picker-head strong{font-size:13px}.picker-head small{color:var(--muted);font-size:11px;margin-top:3px;line-height:1.45}
+.tool-policy-picker>label{display:flex;align-items:center;gap:9px;margin:8px 0;color:var(--muted)}
+.tool-policy-picker>label input[type="checkbox"]{width:auto}.tool-policy-picker>label:has(select){display:block;margin-top:12px}.tool-policy-picker select{margin-top:6px}
