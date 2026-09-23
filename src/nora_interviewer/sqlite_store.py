@@ -318,3 +318,7 @@ class SqliteStore:
         if row is None:
             return None
         return str(row[0])
+
+
+    async def close(self) -> None:
+        return None
