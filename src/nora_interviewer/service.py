@@ -489,6 +489,80 @@ class InterviewService:
             )
             return run
 
+    async def reevaluate_evidence(
+        self,
+        session_id: str,
+        answer_turn_id: str,
+    ) -> EvidenceJudgeRun:
+        session, job = await self._get(session_id)
+        if self.evidence_judge.judge_id == "disabled":
+            raise HTTPException(
+                409,
+                "Evidence judge is disabled for this deployment",
+            )
+
+        answer = next(
+            (
+                turn
+                for turn in session.turns
+                if turn.id == answer_turn_id
+            ),
+            None,
+        )
+        if answer is None:
+            raise HTTPException(404, "Candidate answer turn not found")
+        if answer.speaker is not Speaker.CANDIDATE:
+            raise HTTPException(
+                400,
+                "Evidence re-evaluation requires a candidate answer turn",
+            )
+        if not answer.parent_turn_id:
+            raise HTTPException(
+                400,
+                "Candidate answer has no linked interviewer question",
+            )
+
+        question = next(
+            (
+                turn
+                for turn in session.turns
+                if turn.id == answer.parent_turn_id
+            ),
+            None,
+        )
+        if question is None or question.speaker is not Speaker.INTERVIEWER:
+            raise HTTPException(
+                400,
+                "Candidate answer references an invalid interviewer question",
+            )
+
+        prior_runs = [
+            run
+            for run in session.evidence_judge_runs
+            if run.answer_turn_id == answer.id
+        ]
+        latest = max(
+            prior_runs,
+            key=lambda run: run.created_at,
+            default=None,
+        )
+        run = await self._judge_candidate_evidence(
+            session=session,
+            job=job,
+            question=question,
+            answer=answer,
+            supersede_existing=True,
+            supersedes_run_id=latest.id if latest else None,
+        )
+        if run is None:
+            raise HTTPException(
+                400,
+                "No competency-tagged evidence could be re-evaluated",
+            )
+
+        await self._persist_session(session)
+        return run
+
     async def candidate_control(
         self,
         session_id: str,
