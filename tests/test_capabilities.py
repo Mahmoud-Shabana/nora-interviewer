@@ -37,6 +37,10 @@ def test_capability_description_contains_backends_not_secrets(monkeypatch):
     assert capabilities.interview_brain == "RuleBasedBrain"
     assert capabilities.evidence_judge_enabled is False
     assert capabilities.sandbox_mode == "disabled"
+    assert capabilities.optimistic_concurrency is True
+    assert capabilities.recruiter_review_queue is True
+    assert capabilities.recruiter_review_bundle is True
+    assert capabilities.recruiter_review_console is True
 
     serialized = capabilities.model_dump_json()
     assert "API_KEY" not in serialized
