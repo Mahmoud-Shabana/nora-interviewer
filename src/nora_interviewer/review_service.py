@@ -44,6 +44,8 @@ class ReviewService:
         pending_appeals = 0
         pending_integrity = 0
         unresolved_tools = 0
+        stale_evidence_runs = 0
+        failed_evidence_runs = 0
         completed_sessions = 0
 
         for session in sessions:
@@ -64,6 +66,8 @@ class ReviewService:
             pending_appeals += report.pending_appeals
             pending_integrity += report.integrity_signals
             unresolved_tools += report.unresolved_tools
+            stale_evidence_runs += report.stale_evidence_runs
+            failed_evidence_runs += report.failed_evidence_runs
 
         return ReviewDashboardSummary(
             total_sessions=total_sessions,
@@ -71,6 +75,8 @@ class ReviewService:
             pending_appeals=pending_appeals,
             pending_integrity_signals=pending_integrity,
             unresolved_tools=unresolved_tools,
+            stale_evidence_runs=stale_evidence_runs,
+            failed_evidence_runs=failed_evidence_runs,
             completed_sessions=completed_sessions,
         )
 
@@ -109,6 +115,8 @@ class ReviewService:
             items,
             key=lambda item: (
                 not item.requires_human_review,
+                -item.failed_evidence_runs,
+                -item.stale_evidence_runs,
                 -item.pending_appeals,
                 -item.integrity_signals,
                 -item.unresolved_tools,
