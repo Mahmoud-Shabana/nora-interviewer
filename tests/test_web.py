@@ -25,6 +25,10 @@ def test_interview_room_and_assets_are_served():
     assert "NoraServerSttClient" in stt.text
     assert "AudioWorkletNode" in stt.text
     assert 'type: "commit"' in stt.text
+    assert 'type: "reconnect"' in stt.text
+    assert "reconcileAfterReconnect" in stt.text
+    assert "maxReconnectAttempts" in stt.text
+    assert "inFlight" in stt.text
 
     tts = client.get("/assets/server_tts.js")
     assert tts.status_code == 200
