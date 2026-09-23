@@ -25,6 +25,7 @@ from .config import (
 )
 from .counterfactual import CounterfactualReplayReport
 from .feedback import CandidateFeedbackReport
+from .http_metrics import HttpRequestMetrics
 from .operations import (
     OperationalSnapshot,
     OperationsService,
@@ -177,12 +178,14 @@ tts_bridge = VoiceOutputBridge(
     provider=streaming_tts_provider,
     voice=voice,
 )
+http_metrics = HttpRequestMetrics()
 operations = OperationsService(
     store=store,
     review_service=review_service,
     provider_health=voice_provider_health,
     audio_stream_manager=audio_stream_manager,
     tts_bridge=tts_bridge,
+    http_metrics=http_metrics,
 )
 AUDIO_RECONNECT_GRACE_SECONDS = 30.0
 _audio_expiry_tasks: dict[str, asyncio.Task] = {}
@@ -295,12 +298,35 @@ async def correlation_id_middleware(
     token = set_correlation_id(
         correlation_id
     )
+    started_at = http_metrics.start_timer()
+    await http_metrics.request_started()
     try:
         response = await call_next(request)
+        route = request.scope.get("route")
+        route_template = str(
+            getattr(
+                route,
+                "path",
+                "<unmatched>",
+            )
+        )
+        await http_metrics.request_finished(
+            method=request.method,
+            route=route_template,
+            status_code=response.status_code,
+            started_at=started_at,
+        )
         response.headers[
             "X-Request-ID"
         ] = correlation_id
         return response
+    except Exception:
+        await http_metrics.request_aborted(
+            method=request.method,
+            route="<exception>",
+            started_at=started_at,
+        )
+        raise
     finally:
         reset_correlation_id(token)
 
