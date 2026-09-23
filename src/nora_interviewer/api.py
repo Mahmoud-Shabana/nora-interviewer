@@ -32,6 +32,7 @@ from .models import (
     CancelSessionRequest,
     CompetencyEvidence,
     CreateSession,
+    EvidenceJudgeRun,
     EvidenceObservation,
     IntegrityReviewRequest,
     IntegrityReviewSubmission,
@@ -615,6 +616,28 @@ async def review_integrity_signal(
             reviewer_id=principal.id,
             note=request.note,
         ),
+    )
+
+
+@app.post(
+    "/v1/sessions/{session_id}/evidence/{answer_turn_id}/reevaluate",
+    response_model=EvidenceJudgeRun,
+)
+async def reevaluate_evidence(
+    session_id: str,
+    answer_turn_id: str,
+    if_match: str | None = Header(default=None, alias="If-Match"),
+    principal: Principal = Depends(current_principal),
+) -> EvidenceJudgeRun:
+    session = await require_session_permission(
+        session_id,
+        principal,
+        Permission.REEVALUATE_EVIDENCE,
+    )
+    enforce_session_precondition(session, if_match)
+    return await service.reevaluate_evidence(
+        session_id,
+        answer_turn_id,
     )
 
 
