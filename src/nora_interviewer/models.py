@@ -91,6 +91,12 @@ class EventType(str, Enum):
     SESSION_COMPLETED = "session_completed"
 
 
+class JobToolTemplate(StrictModel):
+    template_id: str = Field(min_length=1, max_length=160)
+    purpose: str = Field(min_length=2, max_length=1000)
+    competency_ids: list[str] = Field(default_factory=list)
+
+
 class Competency(StrictModel):
     id: str = Field(min_length=1)
     description: str = Field(min_length=1)
@@ -105,12 +111,26 @@ class JobSpec(StrictModel):
     competencies: list[Competency] = Field(min_length=1)
     max_questions: int = Field(default=8, ge=1, le=30)
     anchor_ratio: float = Field(default=0.4, ge=0.0, le=1.0)
+    tool_templates: list[JobToolTemplate] = Field(default_factory=list)
+    max_tools: int = Field(default=2, ge=0, le=10)
 
     @model_validator(mode="after")
-    def unique_competencies(self) -> "JobSpec":
+    def validate_job_contract(self) -> "JobSpec":
         ids = [c.id for c in self.competencies]
         if len(ids) != len(set(ids)):
             raise ValueError("competency ids must be unique")
+
+        template_ids = [item.template_id for item in self.tool_templates]
+        if len(template_ids) != len(set(template_ids)):
+            raise ValueError("job tool template ids must be unique")
+
+        known = set(ids)
+        for item in self.tool_templates:
+            unknown = sorted(set(item.competency_ids) - known)
+            if unknown:
+                raise ValueError(
+                    f"tool template {item.template_id!r} references unknown competencies: {unknown}"
+                )
         return self
 
 
@@ -268,11 +288,16 @@ class CandidateResponse(StrictModel):
     text: str = Field(min_length=1, max_length=20_000)
 
 
+class AgentToolRequest(StrictModel):
+    template_id: str = Field(min_length=1, max_length=160)
+
+
 class AgentDecision(StrictModel):
     text: str
     competency_tags: list[str] = Field(default_factory=list)
     parent_turn_id: str | None = None
     completes_interview: bool = False
+    tool_request: AgentToolRequest | None = None
     reason: str
 
 
@@ -280,6 +305,7 @@ class SessionStep(StrictModel):
     session_id: str
     status: SessionStatus
     interviewer_turn: Turn | None = None
+    tool_invocation: ToolInvocation | None = None
 
 
 class EvidenceObservation(StrictModel):
