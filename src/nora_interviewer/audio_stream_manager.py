@@ -222,10 +222,10 @@ class AudioStreamManager:
                 f"expected generation {state.generation}, "
                 f"got {generation}"
             )
-        if next_sequence != state.next_sequence:
+        if next_sequence > state.next_sequence:
             raise AudioSequenceError(
-                f"expected next_sequence {state.next_sequence}, "
-                f"got {next_sequence}"
+                f"client next_sequence {next_sequence} is ahead of "
+                f"server next_sequence {state.next_sequence}"
             )
 
         state.reconnect_count += 1
