@@ -10,7 +10,7 @@ Authorization answers:
 
 > What is that principal allowed to do to this resource?
 
-The current main branch implements the authorization policy and two principal resolvers.
+The current main branch implements the authorization policy and three principal resolvers: local disabled mode, development header mode, and production-oriented JWT/JWKS mode.
 
 ## Roles
 
@@ -123,15 +123,65 @@ This mode exists for local integration testing only.
 
 Client-controlled role headers are **not** a production authentication mechanism.
 
+## JWT / JWKS mode
+
+For production-oriented Bearer token validation:
+
+```bash
+NORA_AUTH_MODE=jwt-jwks
+NORA_AUTH_JWKS_URL=https://identity.example/.well-known/jwks.json
+NORA_AUTH_ISSUER=https://identity.example/
+NORA_AUTH_AUDIENCE=https://api.nora.example
+NORA_AUTH_ALGORITHMS=RS256
+```
+
+Optional claim mappings:
+
+```bash
+NORA_AUTH_PRINCIPAL_CLAIM=sub
+NORA_AUTH_ROLE_CLAIM=nora_role
+NORA_AUTH_CANDIDATE_REF_CLAIM=candidate_ref
+NORA_AUTH_LEEWAY_SECONDS=30
+```
+
+Nora validates the JWT signature using the remote JWKS and checks the configured issuer, audience, expiration, and asymmetric signing algorithm.
+
+Security properties:
+
+- algorithms come from Nora configuration, never from token headers;
+- HMAC algorithms are rejected in JWKS mode;
+- issuer and audience are mandatory;
+- JWKS must use HTTPS by default;
+- candidate JWTs must include the configured candidate reference claim;
+- client-controlled `X-Nora-Role` headers are ignored in JWT mode;
+- JWTs cannot obtain the internal `service` role by default.
+
+Service-role JWTs can be enabled only through:
+
+```bash
+NORA_AUTH_ALLOW_SERVICE_ROLE=true
+```
+
+Local HTTP JWKS endpoints require the explicit development escape hatch:
+
+```bash
+NORA_AUTH_ALLOW_INSECURE_JWKS=true
+```
+
+Install the optional authentication dependency with:
+
+```bash
+pip install -e '.[auth]'
+```
+
 ## Production direction
 
-A production resolver should validate an external identity token or session and produce the same internal `Principal` contract.
+The JWT/JWKS resolver provides a production-capable token validation boundary, but deployments still need organization-specific identity lifecycle, key rotation policy, claim issuance, and account administration.
 
-Possible adapters include:
+Future adapters can include:
 
-- OIDC/JWT;
-- organization SSO;
-- API service credentials;
+- organization SSO session gateways;
+- workload identity/service credentials;
 - signed candidate invitation tokens.
 
 The central `AccessPolicy` does not need to change when authentication providers change.
