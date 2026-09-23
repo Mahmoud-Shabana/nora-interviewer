@@ -20,6 +20,7 @@ from .config import (
     build_store,
     build_streaming_speech_provider,
     build_streaming_tts_provider,
+    build_voice_provider_health_registry,
 )
 from .counterfactual import CounterfactualReplayReport
 from .feedback import CandidateFeedbackReport
@@ -60,6 +61,14 @@ from .review import (
 )
 from .review_bundle import ReviewBundle, build_review_bundle
 from .review_service import ReviewService
+from .provider_health import (
+    ProviderCircuitOpenError,
+    ProviderHealthSnapshot,
+)
+from .providers.guarded_voice import (
+    GuardedStreamingSpeechProvider,
+    GuardedStreamingTtsProvider,
+)
 from .providers.streaming_speech import StreamingSpeechUnavailableError
 from .providers.streaming_tts import StreamingTtsUnavailableError
 from .retention import RetentionManager, RetentionReport, RetentionRequest
@@ -128,8 +137,17 @@ rubric_service = RubricWorkflowService(
 )
 retention = RetentionManager(store)
 review_service = ReviewService(store=store)
-streaming_speech_provider = build_streaming_speech_provider()
-streaming_tts_provider = build_streaming_tts_provider()
+raw_streaming_speech_provider = build_streaming_speech_provider()
+raw_streaming_tts_provider = build_streaming_tts_provider()
+voice_provider_health = build_voice_provider_health_registry()
+streaming_speech_provider = GuardedStreamingSpeechProvider(
+    inner=raw_streaming_speech_provider,
+    registry=voice_provider_health,
+)
+streaming_tts_provider = GuardedStreamingTtsProvider(
+    inner=raw_streaming_tts_provider,
+    registry=voice_provider_health,
+)
 audio_stream_manager = AudioStreamManager()
 audio_bridge = VoiceStreamBridge(
     manager=audio_stream_manager,
@@ -205,6 +223,22 @@ def enforce_session_precondition(
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    await voice_provider_health.register(
+        key="streaming_stt",
+        provider_id=streaming_speech_provider.provider_id,
+        disabled=(
+            streaming_speech_provider.provider_id
+            == "disabled"
+        ),
+    )
+    await voice_provider_health.register(
+        key="streaming_tts",
+        provider_id=streaming_tts_provider.provider_id,
+        disabled=(
+            streaming_tts_provider.provider_id
+            == "disabled"
+        ),
+    )
     try:
         yield
     finally:
@@ -259,6 +293,20 @@ async def readiness() -> dict[str, str]:
         "storage": type(store).__name__,
         "api_version": API_VERSION,
     }
+
+
+@app.get(
+    "/v1/system/voice-health",
+    response_model=list[ProviderHealthSnapshot],
+)
+async def voice_provider_health_status(
+    principal: Principal = Depends(current_principal),
+) -> list[ProviderHealthSnapshot]:
+    require_global_permission(
+        principal,
+        Permission.READ_SYSTEM,
+    )
+    return await voice_provider_health.snapshots()
 
 
 @app.get(
@@ -1213,6 +1261,11 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
 
 
 def _audio_error_payload(exc: Exception) -> dict:
+    if isinstance(exc, ProviderCircuitOpenError):
+        return {
+            "code": "stt_circuit_open",
+            "message": str(exc),
+        }
     if isinstance(exc, StreamingSpeechUnavailableError):
         return {
             "code": "stt_unavailable",
@@ -1240,6 +1293,11 @@ def _audio_error_payload(exc: Exception) -> dict:
 
 
 def _tts_error_payload(exc: Exception) -> dict:
+    if isinstance(exc, ProviderCircuitOpenError):
+        return {
+            "code": "tts_circuit_open",
+            "message": str(exc),
+        }
     if isinstance(exc, StreamingTtsUnavailableError):
         return {
             "code": "tts_unavailable",
@@ -1510,6 +1568,7 @@ async def tts_socket(
             pump_task.cancel()
         return
     except (
+        ProviderCircuitOpenError,
         StreamingTtsUnavailableError,
         TtsStreamConflictError,
         TtsStreamNotFoundError,
@@ -1862,6 +1921,7 @@ async def audio_socket(
         AudioReconnectError,
         AudioSequenceError,
         AudioStreamError,
+        ProviderCircuitOpenError,
         StreamingSpeechUnavailableError,
         ValidationError,
         HTTPException,
