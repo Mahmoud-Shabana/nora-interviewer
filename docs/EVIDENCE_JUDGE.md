@@ -149,3 +149,30 @@ Application code still owns:
 - final graph mutation.
 
 The model never directly mutates interview state.
+
+
+## Multi-model ensemble mode
+
+Nora can require agreement across multiple independent semantic models exposed by the same OpenAI-compatible endpoint.
+
+```bash
+NORA_EVIDENCE_JUDGE_MODE=ensemble
+NORA_EVIDENCE_JUDGE_BASE_URL=https://judge-provider.example/v1
+NORA_EVIDENCE_JUDGE_MODELS=judge-a,judge-b,judge-c
+NORA_EVIDENCE_JUDGE_AGREEMENT_THRESHOLD=0.67
+NORA_EVIDENCE_JUDGE_API_KEY=...
+```
+
+The ensemble:
+
+- requires at least two unique model IDs;
+- keeps every sub-judge ID distinct;
+- validates each sub-judge through the same literal-quote grounding gate;
+- records provider/schema/grounding failures per sub-judge;
+- computes a minimum vote count from the configured agreement threshold;
+- emits `insufficient_evidence` when no evidence state reaches the threshold;
+- exposes disagreements in the audit payload instead of hiding them.
+
+For example, with three judges and a threshold of `0.67`, at least three votes are required because Nora uses `ceil(threshold * judge_count)`. Use `0.66` when a two-of-three policy is intended.
+
+This conservative rounding is deliberate: the configured numeric threshold is treated as a minimum fraction, never rounded down.
