@@ -20,7 +20,7 @@ class EvidenceJudgeEnsemble:
         self,
         judges: list[EvidenceJudge],
         *,
-        agreement_threshold: float = 0.67,
+        agreement_threshold: float = 2 / 3,
     ) -> None:
         if len(judges) < 2:
             raise ValueError(
