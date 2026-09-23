@@ -101,6 +101,27 @@ Technical communication</textarea></label>
           <div><p class="eyebrow">INTERVIEW ROOM</p><h2>Conversation</h2></div>
           <button class="ghost" id="restartBtn" type="button">New session</button>
         </div>
+        <section class="tool-workspace hidden" id="toolWorkspace">
+          <div class="tool-head">
+            <div>
+              <p class="eyebrow" id="toolKind">INTERVIEW TOOL</p>
+              <h3 id="toolTitle">Practical task</h3>
+            </div>
+            <button class="ghost" id="minimizeToolBtn" type="button">Minimize</button>
+          </div>
+          <p class="tool-instructions" id="toolInstructions"></p>
+          <div class="tool-tests hidden" id="toolTests">
+            <strong>Public checks</strong>
+            <ul id="toolTestList"></ul>
+          </div>
+          <textarea id="toolEditor" class="tool-editor" rows="12"></textarea>
+          <div class="tool-actions">
+            <span id="toolStatus">Not submitted</span>
+            <button class="primary tool-submit" id="submitToolBtn" type="button">Submit artifact <span>→</span></button>
+          </div>
+          <div class="tool-result hidden" id="toolResult"></div>
+        </section>
+        <button class="tool-reopen hidden" id="reopenToolBtn" type="button">Open active task</button>
         <div class="messages" id="messages" aria-live="polite"></div>
         <div class="candidate-controls" aria-label="Interview controls">
           <button type="button" data-control="repeat">Repeat</button>
