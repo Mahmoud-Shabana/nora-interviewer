@@ -199,6 +199,11 @@ def approve_rubric_draft(
     })
     return approved_draft, job
 
+class RubricApprovalResult(StrictModel):
+    draft: RubricDraft
+    job: JobSpec
+
+
 class RubricDrafter(Protocol):
     @property
     def drafter_id(self) -> str: ...
