@@ -86,6 +86,11 @@ from .rubric_drafting import (
 )
 from .rubric_service import RubricWorkflowService
 from .service import InterviewService
+from .trace_context import (
+    reset_correlation_id,
+    resolve_correlation_id,
+    set_correlation_id,
+)
 from .voice import (
     RealtimeVoiceCoordinator,
     TranscriptEvent,
