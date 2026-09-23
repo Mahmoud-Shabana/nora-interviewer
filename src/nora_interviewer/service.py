@@ -29,6 +29,8 @@ from .models import (
     EvidenceObservation,
     EvidenceState,
     EventType,
+    IntegrityReviewRequest,
+    IntegrityReviewStatus,
     IntegritySignal,
     IntegritySignalRequest,
     InterviewEvent,
@@ -777,6 +779,42 @@ class InterviewService:
                 "signal_id": signal.id,
                 "kind": signal.kind,
                 "confidence": signal.confidence,
+                "requires_human_review": True,
+            },
+        )
+        await self.store.put_session(session)
+        return signal
+
+    async def review_integrity_signal(
+        self,
+        session_id: str,
+        signal_id: str,
+        request: IntegrityReviewRequest,
+    ) -> IntegritySignal:
+        session, _ = await self._get(session_id)
+        signal = next(
+            (
+                item
+                for item in session.integrity_signals
+                if item.id == signal_id
+            ),
+            None,
+        )
+        if signal is None:
+            raise HTTPException(404, "Integrity signal not found")
+        if signal.review_status is IntegrityReviewStatus.REVIEWED:
+            raise HTTPException(409, "Integrity signal is already reviewed")
+
+        signal.review_status = IntegrityReviewStatus.REVIEWED
+        signal.reviewed_by = request.reviewer_id
+        signal.review_note = request.note
+        append_event(
+            session,
+            EventType.INTEGRITY_REVIEWED,
+            payload={
+                "signal_id": signal.id,
+                "reviewer_id": request.reviewer_id,
+                "note": request.note,
                 "requires_human_review": True,
             },
         )
