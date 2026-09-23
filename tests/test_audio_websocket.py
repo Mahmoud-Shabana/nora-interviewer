@@ -1,4 +1,5 @@
 import asyncio
+import struct
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ from nora_interviewer.voice_stream import (
     AudioChunkMessage,
     SpeechRecognitionEvent,
 )
+from nora_interviewer.vad import VadConfig
 from nora_interviewer.voice_stream_bridge import VoiceStreamBridge
 
 
@@ -114,7 +116,12 @@ def setup_session(client: TestClient) -> str:
     return session_id
 
 
-def install_bridge(monkeypatch, *, emit_transcript: bool):
+def install_bridge(
+    monkeypatch,
+    *,
+    emit_transcript: bool,
+    vad_config: VadConfig | None = None,
+):
     manager = AudioStreamManager()
     provider = QueueSpeechProvider(
         emit_transcript=emit_transcript
@@ -123,6 +130,7 @@ def install_bridge(monkeypatch, *, emit_transcript: bool):
         manager=manager,
         provider=provider,
         voice=api.voice,
+        vad_config=vad_config,
     )
     monkeypatch.setattr(
         api,
@@ -431,3 +439,116 @@ def test_audio_socket_reconnect_accepts_last_acknowledged_cursor(monkeypatch):
         assert provider.sessions[0].pushed == 2
         assert provider.sessions[0].committed is True
         assert manager.state(stream_id).next_sequence == 2
+
+
+
+def pcm16_frame(
+    value: int,
+    *,
+    samples: int = 160,
+) -> bytes:
+    return struct.pack(
+        "<" + "h" * samples,
+        *([value] * samples),
+    )
+
+
+def test_audio_socket_vad_auto_commits_and_discards_late_frames(
+    monkeypatch,
+):
+    _, provider, _ = install_bridge(
+        monkeypatch,
+        emit_transcript=False,
+        vad_config=VadConfig(
+            speech_threshold=0.02,
+            release_threshold=0.01,
+            speech_start_ms=20,
+            speech_end_silence_ms=100,
+            max_utterance_ms=10_000,
+        ),
+    )
+
+    with TestClient(api.app) as client:
+        session_id = setup_session(client)
+
+        with client.websocket_connect(
+            f"/v1/ws/audio/{session_id}"
+        ) as socket:
+            socket.send_json({
+                "type": "open",
+                "data": {
+                    "locale": "en",
+                    "config": {
+                        "encoding": "pcm16",
+                        "sample_rate_hz": 8000,
+                        "channels": 1,
+                    },
+                },
+            })
+            opened = socket.receive_json()
+            stream_id = opened["data"]["state"]["stream_id"]
+            generation = opened["data"]["state"]["generation"]
+
+            frames = [
+                pcm16_frame(12_000),
+                *[
+                    pcm16_frame(0)
+                    for _ in range(5)
+                ],
+            ]
+
+            committed = None
+            for sequence, audio in enumerate(frames):
+                socket.send_json({
+                    "type": "chunk",
+                    "data": AudioChunkMessage.from_bytes(
+                        sequence=sequence,
+                        generation=generation,
+                        audio=audio,
+                    ).model_dump(mode="json"),
+                })
+                ack = socket.receive_json()
+                assert ack["type"] == "chunk_ack"
+
+                if (
+                    ack["data"].get("vad", {})
+                    .get("auto_commit_recommended")
+                ):
+                    committed = socket.receive_json()
+                    assert (
+                        committed["type"]
+                        == "stream_committed"
+                    )
+                    break
+
+            assert committed is not None
+            assert committed["data"]["reason"] == "vad_silence"
+            assert provider.sessions[0].committed is True
+            pushed_before_late = provider.sessions[0].pushed
+
+            late_sequence = (
+                committed["data"]["vad"]
+                and ack["data"]["next_sequence"]
+            )
+            socket.send_json({
+                "type": "chunk",
+                "data": AudioChunkMessage.from_bytes(
+                    sequence=late_sequence,
+                    generation=generation,
+                    audio=pcm16_frame(8_000),
+                ).model_dump(mode="json"),
+            })
+            late_ack = socket.receive_json()
+            assert late_ack["type"] == "chunk_ack"
+            assert (
+                provider.sessions[0].pushed
+                == pushed_before_late
+            )
+
+            socket.send_json({
+                "type": "close",
+                "data": {
+                    "stream_id": stream_id,
+                },
+            })
+            assert socket.receive_json()["type"] == "stream_closed"
