@@ -19,6 +19,10 @@ from .review import ReviewDashboardSummary
 from .review_service import ReviewService
 from .storage import Store
 from .voice_output_bridge import VoiceOutputBridge
+from .websocket_metrics import (
+    WebSocketMetrics,
+    WebSocketMetricsSnapshot,
+)
 
 
 class OperationalSnapshot(StrictModel):
@@ -41,6 +45,9 @@ class OperationalSnapshot(StrictModel):
     http: HttpMetricsSnapshot = Field(
         default_factory=HttpMetricsSnapshot
     )
+    websockets: WebSocketMetricsSnapshot = Field(
+        default_factory=WebSocketMetricsSnapshot
+    )
 
 
 class OperationsService:
@@ -55,6 +62,7 @@ class OperationsService:
         audio_stream_manager: AudioStreamManager,
         tts_bridge: VoiceOutputBridge,
         http_metrics: HttpRequestMetrics | None = None,
+        websocket_metrics: WebSocketMetrics | None = None,
     ) -> None:
         self.store = store
         self.review_service = review_service
@@ -62,6 +70,7 @@ class OperationsService:
         self.audio_stream_manager = audio_stream_manager
         self.tts_bridge = tts_bridge
         self.http_metrics = http_metrics
+        self.websocket_metrics = websocket_metrics
 
     async def snapshot(self) -> OperationalSnapshot:
         sessions = await self.store.list_sessions()
@@ -117,6 +126,11 @@ class OperationsService:
                 await self.http_metrics.snapshot()
                 if self.http_metrics is not None
                 else HttpMetricsSnapshot()
+            ),
+            websockets=(
+                await self.websocket_metrics.snapshot()
+                if self.websocket_metrics is not None
+                else WebSocketMetricsSnapshot()
             ),
         )
 
@@ -269,6 +283,44 @@ def render_prometheus(
         lines.append(
             "nora_http_request_duration_seconds_count"
             f"{{{base_labels}}} {series.requests}"
+        )
+
+    ws = snapshot.websockets
+    lines.extend([
+        "# HELP nora_websocket_connections_active Active accepted WebSocket connections by bounded channel.",
+        "# TYPE nora_websocket_connections_active gauge",
+        "# HELP nora_websocket_connections_opened_total Accepted WebSocket connections by bounded channel.",
+        "# TYPE nora_websocket_connections_opened_total counter",
+        "# HELP nora_websocket_connections_closed_total Closed accepted WebSocket connections by bounded channel.",
+        "# TYPE nora_websocket_connections_closed_total counter",
+        "# HELP nora_websocket_errors_total WebSocket application failures by bounded channel.",
+        "# TYPE nora_websocket_errors_total counter",
+        "# HELP nora_websocket_connection_duration_seconds_sum Aggregate accepted WebSocket connection duration.",
+        "# TYPE nora_websocket_connection_duration_seconds_sum counter",
+    ])
+    for channel in ws.channels:
+        label = (
+            f'channel="{_label(channel.channel)}"'
+        )
+        lines.append(
+            f"nora_websocket_connections_active{{{label}}} "
+            f"{channel.active}"
+        )
+        lines.append(
+            f"nora_websocket_connections_opened_total{{{label}}} "
+            f"{channel.opened_total}"
+        )
+        lines.append(
+            f"nora_websocket_connections_closed_total{{{label}}} "
+            f"{channel.closed_total}"
+        )
+        lines.append(
+            f"nora_websocket_errors_total{{{label}}} "
+            f"{channel.errors_total}"
+        )
+        lines.append(
+            "nora_websocket_connection_duration_seconds_sum"
+            f"{{{label}}} {channel.duration_seconds_sum:g}"
         )
 
     return "\n".join(lines) + "\n"
