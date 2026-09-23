@@ -50,7 +50,7 @@ from .planner import DualLanePlanner
 from .providers.base import InterviewBrain
 from .replay import ReplayState, replay_events
 from .sandbox import default_sandbox_runner
-from .storage import InMemoryStore
+from .storage import Store
 from .tool_templates import ToolTemplateRegistry, default_tool_template_registry
 from .tools import ToolRegistry, default_tool_registry
 
@@ -58,7 +58,7 @@ from .tools import ToolRegistry, default_tool_registry
 class InterviewService:
     def __init__(
         self,
-        store: InMemoryStore,
+        store: Store,
         brain: InterviewBrain,
         planner: DualLanePlanner | None = None,
         tool_registry: ToolRegistry | None = None,
