@@ -9,6 +9,7 @@ from .voice import (
     RealtimeVoiceCoordinator,
     TranscriptEvent,
     VoiceSessionState,
+    VoiceTransportSelectionEvent,
     VoiceTurnResult,
 )
 from .voice_stream import (
@@ -108,6 +109,20 @@ class VoiceStreamBridge:
             generation=voice_state.generation,
             config=config,
         )
+        await self.voice.transport_selected(
+            session_id,
+            VoiceTransportSelectionEvent(
+                direction="stt",
+                transport="server",
+                provider_id=str(
+                    getattr(
+                        self.provider,
+                        "provider_id",
+                        type(self.provider).__name__,
+                    )
+                ),
+            ),
+        )
 
         record = _ProviderStream(
             session=provider_session,
@@ -179,6 +194,23 @@ class VoiceStreamBridge:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            try:
+                state = self.manager.state(stream_id)
+                await self.voice.provider_failed(
+                    state.session_id,
+                    direction="stt",
+                    provider_id=str(
+                        getattr(
+                            self.provider,
+                            "provider_id",
+                            type(self.provider).__name__,
+                        )
+                    ),
+                    error_type=type(exc).__name__,
+                    message=str(exc),
+                )
+            except Exception:
+                pass
             await record.queue.put(
                 StreamingProviderFailure(
                     error_type=type(exc).__name__,
@@ -208,6 +240,24 @@ class VoiceStreamBridge:
             await provider_stream.session.push_audio(
                 audio
             )
+        except Exception as exc:
+            state = self.manager.state(stream_id)
+            try:
+                await self.voice.provider_failed(
+                    state.session_id,
+                    direction="stt",
+                    provider_id=str(
+                        getattr(
+                            self.provider,
+                            "provider_id",
+                            type(self.provider).__name__,
+                        )
+                    ),
+                    error_type=type(exc).__name__,
+                    message=str(exc),
+                )
+            finally:
+                raise
         finally:
             self.manager.acknowledge_processed(
                 stream_id,
@@ -230,7 +280,26 @@ class VoiceStreamBridge:
         stream_id: str,
     ) -> None:
         record = self._provider(stream_id)
-        await record.session.commit()
+        try:
+            await record.session.commit()
+        except Exception as exc:
+            state = self.manager.state(stream_id)
+            try:
+                await self.voice.provider_failed(
+                    state.session_id,
+                    direction="stt",
+                    provider_id=str(
+                        getattr(
+                            self.provider,
+                            "provider_id",
+                            type(self.provider).__name__,
+                        )
+                    ),
+                    error_type=type(exc).__name__,
+                    message=str(exc),
+                )
+            finally:
+                raise
 
     async def next_event(
         self,
