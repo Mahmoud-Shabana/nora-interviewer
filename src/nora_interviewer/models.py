@@ -84,6 +84,7 @@ class EventType(str, Enum):
     CANDIDATE_CONTROL = "candidate_control"
     TRANSCRIPT_CORRECTED = "transcript_corrected"
     APPEAL_SUBMITTED = "appeal_submitted"
+    APPEAL_REVIEWED = "appeal_reviewed"
     EVIDENCE_OBSERVED = "evidence_observed"
     EVIDENCE_JUDGE_FAILED = "evidence_judge_failed"
     EVIDENCE_JUDGE_DISAGREEMENT = "evidence_judge_disagreement"
@@ -213,11 +214,18 @@ class CandidateAppeal(StrictModel):
     message: str = Field(min_length=3, max_length=5000)
     turn_ids: list[str] = Field(default_factory=list)
     status: AppealStatus = AppealStatus.PENDING
+    reviewed_by: str | None = Field(default=None, max_length=256)
+    review_note: str | None = Field(default=None, max_length=5000)
 
 
 class CandidateAppealRequest(StrictModel):
     message: str = Field(min_length=3, max_length=5000)
     turn_ids: list[str] = Field(default_factory=list)
+
+
+class AppealReviewRequest(StrictModel):
+    reviewer_id: str = Field(min_length=1, max_length=256)
+    note: str = Field(min_length=2, max_length=5000)
 
 
 class IntegritySignal(StrictModel):
