@@ -44,8 +44,8 @@ class HttpMetricSeries(StrictModel):
 
 
 class HttpMetricsSnapshot(StrictModel):
-    requests_total: int = Field(ge=0)
-    in_flight: int = Field(ge=0)
+    requests_total: int = Field(default=0, ge=0)
+    in_flight: int = Field(default=0, ge=0)
     series: list[HttpMetricSeries] = Field(default_factory=list)
     latency_buckets_seconds: list[float] = Field(default_factory=list)
 
