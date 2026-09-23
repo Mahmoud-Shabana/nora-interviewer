@@ -19,6 +19,7 @@ from .evidence_judge import (
 )
 from .feedback import CandidateFeedbackReport, build_candidate_feedback
 from .models import (
+    AppealReviewRequest,
     CandidateAppeal,
     CandidateAppealRequest,
     CandidateControlKind,
@@ -716,6 +717,41 @@ class InterviewService:
             session,
             EventType.APPEAL_SUBMITTED,
             payload={"appeal_id": appeal.id, "turn_ids": appeal.turn_ids},
+        )
+        await self.store.put_session(session)
+        return appeal
+
+    async def review_appeal(
+        self,
+        session_id: str,
+        appeal_id: str,
+        request: AppealReviewRequest,
+    ) -> CandidateAppeal:
+        session, _ = await self._get(session_id)
+        appeal = next(
+            (
+                item
+                for item in session.appeals
+                if item.id == appeal_id
+            ),
+            None,
+        )
+        if appeal is None:
+            raise HTTPException(404, "Appeal not found")
+        if appeal.status.value == "reviewed":
+            raise HTTPException(409, "Appeal is already reviewed")
+
+        appeal.status = appeal.status.__class__.REVIEWED
+        appeal.reviewed_by = request.reviewer_id
+        appeal.review_note = request.note
+        append_event(
+            session,
+            EventType.APPEAL_REVIEWED,
+            payload={
+                "appeal_id": appeal.id,
+                "reviewer_id": request.reviewer_id,
+                "note": request.note,
+            },
         )
         await self.store.put_session(session)
         return appeal
