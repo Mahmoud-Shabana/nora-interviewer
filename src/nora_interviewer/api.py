@@ -38,6 +38,8 @@ from .models import (
     VoxRubricTrace,
 )
 from .replay import ReplayState
+from .review import RecruiterSessionReport, ReviewQueueItem
+from .review_service import ReviewService
 from .retention import RetentionManager, RetentionReport, RetentionRequest
 from .service import InterviewService
 from .voice import (
@@ -144,6 +146,41 @@ async def run_retention(
         Permission.RUN_RETENTION,
     )
     return await retention.run(request)
+
+
+@app.get(
+    "/v1/review/queue",
+    response_model=list[ReviewQueueItem],
+)
+async def review_queue(
+    requires_review_only: bool = True,
+    job_id: str | None = None,
+    principal: Principal = Depends(current_principal),
+) -> list[ReviewQueueItem]:
+    require_global_permission(
+        principal,
+        Permission.READ_REVIEW_QUEUE,
+    )
+    return await review_service.queue(
+        requires_review_only=requires_review_only,
+        job_id=job_id,
+    )
+
+
+@app.get(
+    "/v1/review/sessions/{session_id}",
+    response_model=RecruiterSessionReport,
+)
+async def recruiter_session_report(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> RecruiterSessionReport:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.READ_RECRUITER_REPORT,
+    )
+    return await review_service.session_report(session_id)
 
 
 @app.post("/v1/jobs", response_model=JobSpec, status_code=201)
