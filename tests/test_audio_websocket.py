@@ -18,6 +18,7 @@ class QueueSpeechSession:
         self.queue = asyncio.Queue()
         self.closed = False
         self.cancelled = False
+        self.committed = False
         self.pushed = 0
 
     async def push_audio(self, audio: bytes) -> None:
@@ -48,6 +49,9 @@ class QueueSpeechSession:
             if item is None:
                 return
             yield item
+
+    async def commit(self) -> None:
+        self.committed = True
 
     async def close(self) -> None:
         self.closed = True
@@ -284,3 +288,42 @@ def test_audio_socket_can_reconnect_without_replaying_chunks(monkeypatch):
 
         assert provider.sessions[0].pushed == 2
         assert manager.state(stream_id).closed is True
+
+
+
+def test_audio_socket_commits_provider_stream(monkeypatch):
+    _, provider, _ = install_bridge(
+        monkeypatch,
+        emit_transcript=False,
+    )
+
+    with TestClient(api.app) as client:
+        session_id = setup_session(client)
+
+        with client.websocket_connect(
+            f"/v1/ws/audio/{session_id}"
+        ) as socket:
+            socket.send_json({
+                "type": "open",
+                "data": {"locale": "en"},
+            })
+            opened = socket.receive_json()
+            assert opened["type"] == "stream_opened"
+            stream_id = opened["data"]["state"]["stream_id"]
+
+            socket.send_json({
+                "type": "commit",
+                "data": {},
+            })
+            committed = socket.receive_json()
+            assert committed["type"] == "stream_committed"
+            assert committed["data"]["stream_id"] == stream_id
+            assert provider.sessions[0].committed is True
+
+            socket.send_json({
+                "type": "close",
+                "data": {
+                    "stream_id": stream_id,
+                },
+            })
+            assert socket.receive_json()["type"] == "stream_closed"
