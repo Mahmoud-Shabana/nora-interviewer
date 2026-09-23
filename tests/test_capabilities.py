@@ -41,6 +41,7 @@ def test_capability_description_contains_backends_not_secrets(monkeypatch):
     assert capabilities.recruiter_review_queue is True
     assert capabilities.recruiter_review_bundle is True
     assert capabilities.recruiter_review_console is True
+    assert capabilities.voice_provider_health is True
     assert capabilities.streaming_stt_enabled is False
     assert (
         capabilities.streaming_stt_backend
@@ -118,3 +119,101 @@ def test_capabilities_advertise_session_safety_features():
     assert result.optimistic_concurrency is True
     assert result.session_etags is True
     assert result.session_cancellation is True
+
+
+
+def test_voice_provider_health_endpoint_is_system_scoped(monkeypatch):
+    monkeypatch.setattr(
+        api,
+        "principal_resolver",
+        DevHeaderPrincipalResolver(),
+    )
+
+    with TestClient(api.app) as client:
+        candidate = client.get(
+            "/v1/system/voice-health",
+            headers={
+                "X-Nora-Principal": "candidate",
+                "X-Nora-Role": "candidate",
+                "X-Nora-Candidate-Ref": "candidate-1",
+            },
+        )
+        assert candidate.status_code == 403
+
+        recruiter = client.get(
+            "/v1/system/voice-health",
+            headers={
+                "X-Nora-Principal": "recruiter",
+                "X-Nora-Role": "recruiter",
+            },
+        )
+        assert recruiter.status_code == 200
+        snapshots = {
+            item["key"]: item
+            for item in recruiter.json()
+        }
+        assert set(snapshots) == {
+            "streaming_stt",
+            "streaming_tts",
+        }
+        assert snapshots["streaming_stt"]["state"] in {
+            "healthy",
+            "degraded",
+            "open",
+            "disabled",
+        }
+
+
+def test_session_voice_capabilities_include_health_and_preferred_stt():
+    with TestClient(api.app) as client:
+        job = client.post(
+            "/v1/jobs",
+            json={
+                "id": "voice-cap-job",
+                "title": "Engineer",
+                "description": "Build reliable systems.",
+                "competencies": [
+                    {
+                        "id": "debugging",
+                        "description": "production debugging",
+                    }
+                ],
+            },
+        )
+        assert job.status_code == 201
+
+        session = client.post(
+            "/v1/sessions",
+            json={
+                "job_id": "voice-cap-job",
+                "candidate_ref": "candidate",
+                "locale": "en",
+                "consent_to_ai_interview": True,
+                "consent_to_transcript": True,
+            },
+        )
+        assert session.status_code == 201
+        session_id = session.json()["id"]
+
+        response = client.get(
+            f"/v1/sessions/{session_id}/voice/capabilities"
+        )
+        assert response.status_code == 200
+        payload = response.json()
+
+        assert "streaming_stt_available" in payload
+        assert "streaming_tts_available" in payload
+        assert payload["stt_health"] in {
+            "healthy",
+            "degraded",
+            "open",
+            "disabled",
+        }
+        assert payload["tts_health"] in {
+            "healthy",
+            "degraded",
+            "open",
+            "disabled",
+        }
+        assert payload["preferred_stt_config"]["encoding"] == "pcm16"
+        assert payload["preferred_stt_config"]["sample_rate_hz"] == 16000
