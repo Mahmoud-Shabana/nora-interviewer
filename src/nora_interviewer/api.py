@@ -1860,6 +1860,22 @@ async def audio_socket(
                 })
                 continue
 
+            if message_type == "commit":
+                if active_stream_id is None:
+                    raise AudioReconnectError(
+                        "open or reconnect an audio stream first"
+                    )
+                await audio_bridge.commit(
+                    stream_id=active_stream_id,
+                )
+                await send_json({
+                    "type": "stream_committed",
+                    "data": {
+                        "stream_id": active_stream_id,
+                    },
+                })
+                continue
+
             if message_type == "close":
                 if active_stream_id is None:
                     await send_json({
@@ -1916,7 +1932,7 @@ async def audio_socket(
                 "error": {
                     "code": "unknown_audio_message",
                     "message": (
-                        "Expected open, reconnect, chunk, "
+                        "Expected open, reconnect, chunk, commit, "
                         "close, or ping."
                     ),
                 },
