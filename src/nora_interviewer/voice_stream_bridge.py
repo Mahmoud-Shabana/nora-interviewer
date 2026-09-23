@@ -54,6 +54,7 @@ class _ProviderStream:
     locale: str
     queue: asyncio.Queue
     pump_task: asyncio.Task | None = None
+    committed: bool = False
 
 
 class VoiceStreamBridge:
@@ -281,8 +282,12 @@ class VoiceStreamBridge:
         stream_id: str,
     ) -> None:
         record = self._provider(stream_id)
+        if record.committed:
+            return
+
         try:
             await record.session.commit()
+            record.committed = True
         except Exception as exc:
             state = self.manager.state(stream_id)
             try:
