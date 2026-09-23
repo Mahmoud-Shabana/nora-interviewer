@@ -5,7 +5,7 @@ from time import perf_counter
 from typing import Callable, Literal
 
 from fastapi import HTTPException
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .audit import append_event
 from .models import EventType, SessionStatus, StrictModel, ToolInvocation, Turn
@@ -42,6 +42,14 @@ class VoiceTransportFallbackEvent(StrictModel):
     from_transport: Literal["server", "browser"]
     to_transport: Literal["server", "browser"]
     reason: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_transition(self) -> "VoiceTransportFallbackEvent":
+        if self.from_transport == self.to_transport:
+            raise ValueError(
+                "voice transport fallback must change transport"
+            )
+        return self
 
 
 class VoiceSessionState(StrictModel):
