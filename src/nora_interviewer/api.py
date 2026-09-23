@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .coding import CodingChallengeRequest
 from .config import build_brain
+from .counterfactual import CounterfactualReplayReport
 from .feedback import CandidateFeedbackReport
 from .models import (
     CandidateAppeal,
@@ -198,6 +199,14 @@ async def get_events(session_id: str) -> list[InterviewEvent]:
 )
 async def replay_session(session_id: str) -> ReplayState:
     return await service.replay(session_id)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/decision-replay",
+    response_model=CounterfactualReplayReport,
+)
+async def decision_replay(session_id: str) -> CounterfactualReplayReport:
+    return await service.decision_replay(session_id)
 
 
 @app.get("/v1/sessions/{session_id}/voxrubric", response_model=VoxRubricTrace)
