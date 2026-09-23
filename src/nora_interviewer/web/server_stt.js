@@ -81,8 +81,17 @@ class NoraServerSttClient {
     this.serverNextSequence = 0;
     this.pendingAcks = 0;
     this.frameQueue = [];
+    this.inFlight = new Map();
     this.maxInFlight = 6;
+    this.maxQueuedFrames = 150;
     this.maxSocketBufferedBytes = 128 * 1024;
+
+    this.reconnectPromise = null;
+    this.reconnectResolve = null;
+    this.reconnectReject = null;
+    this.reconnecting = false;
+    this.maxReconnectAttempts = 3;
+    this.commitRequested = false;
 
     this.mediaStream = null;
     this.audioContext = null;
@@ -141,9 +150,24 @@ class NoraServerSttClient {
             this.ws = null;
           }
           this.connectPromise = null;
+
+          const canRecover = (
+            !this.intentionalClose
+            && (this.active || this.committing)
+            && this.streamId
+            && this.reconnectToken
+          );
+          if (canRecover && !this.reconnecting) {
+            this.recoverSocket().catch((error) => {
+              this.fail(error);
+            });
+            return;
+          }
+
           if (
             !this.intentionalClose
             && (this.active || this.committing)
+            && !this.reconnecting
           ) {
             this.fail(
               new Error(
@@ -177,6 +201,7 @@ class NoraServerSttClient {
 
     await this.ensureSocket();
     await this.openStream();
+    this.active = true;
 
     try {
       await this.startCapture();
@@ -184,8 +209,6 @@ class NoraServerSttClient {
       await this.cancel("microphone_start_failed");
       throw error;
     }
-
-    this.active = true;
     this.onState({
       phase: "listening",
       transport: "server-stt",
@@ -235,6 +258,145 @@ class NoraServerSttClient {
     this.openPromise = null;
     this.openResolve = null;
     this.openReject = null;
+  }
+
+  clearReconnectPromise() {
+    this.reconnectPromise = null;
+    this.reconnectResolve = null;
+    this.reconnectReject = null;
+  }
+
+  async reconnectStream() {
+    if (
+      !this.ws
+      || this.ws.readyState !== WebSocket.OPEN
+      || !this.streamId
+      || !this.reconnectToken
+    ) {
+      throw new Error(
+        "Server STT reconnect state is incomplete"
+      );
+    }
+
+    this.reconnectPromise = new Promise(
+      (resolve, reject) => {
+        this.reconnectResolve = resolve;
+        this.reconnectReject = reject;
+      }
+    );
+
+    this.ws.send(JSON.stringify({
+      type: "reconnect",
+      data: {
+        stream_id: this.streamId,
+        reconnect_token: this.reconnectToken,
+        generation: this.generation,
+        next_sequence: this.serverNextSequence,
+      },
+    }));
+
+    const timeout = setTimeout(() => {
+      if (this.reconnectReject) {
+        this.reconnectReject(
+          new Error("Server STT reconnect timed out")
+        );
+      }
+      this.clearReconnectPromise();
+    }, 5000);
+
+    try {
+      return await this.reconnectPromise;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async recoverSocket() {
+    if (this.reconnecting) return;
+    this.reconnecting = true;
+    this.onState({
+      phase: "reconnecting",
+      transport: "server-stt",
+    });
+
+    let lastError = null;
+    try {
+      for (
+        let attempt = 1;
+        attempt <= this.maxReconnectAttempts;
+        attempt += 1
+      ) {
+        if (attempt > 1) {
+          await new Promise(
+            (resolve) => setTimeout(
+              resolve,
+              250 * attempt,
+            )
+          );
+        }
+
+        try {
+          await this.ensureSocket();
+          await this.reconnectStream();
+
+          this.onState({
+            phase: (
+              this.committing
+              ? "processing"
+              : "listening"
+            ),
+            transport: "server-stt",
+            reconnected: true,
+          });
+
+          if (this.committing) {
+            await this.flushAndCommit();
+          } else {
+            this.flushFrames();
+          }
+          return;
+        } catch (error) {
+          lastError = error;
+          if (this.ws) {
+            try {
+              this.ws.close();
+            } catch {}
+            this.ws = null;
+          }
+          this.connectPromise = null;
+          this.clearReconnectPromise();
+        }
+      }
+    } finally {
+      this.reconnecting = false;
+    }
+
+    throw new Error(
+      "Server STT reconnect failed after "
+      + this.maxReconnectAttempts
+      + " attempts: "
+      + (lastError?.message || "unknown error")
+    );
+  }
+
+  reconcileAfterReconnect(authoritativeNextSequence) {
+    const replay = [
+      ...this.inFlight.entries(),
+    ]
+      .filter(([sequence]) => (
+        sequence >= authoritativeNextSequence
+      ))
+      .sort((left, right) => left[0] - right[0])
+      .map(([, frame]) => frame);
+
+    this.inFlight.clear();
+    this.pendingAcks = 0;
+    this.frameQueue = [
+      ...replay,
+      ...this.frameQueue,
+    ];
+    this.serverNextSequence = authoritativeNextSequence;
+    this.nextSequence = authoritativeNextSequence;
   }
 
   async startCapture() {
@@ -395,6 +557,17 @@ class NoraServerSttClient {
         frameSamples
       );
       this.frameQueue.push(frame);
+      if (
+        this.frameQueue.length
+        > this.maxQueuedFrames
+      ) {
+        this.fail(
+          new Error(
+            "Microphone reconnect buffer exceeded its safe limit"
+          )
+        );
+        return;
+      }
     }
     this.flushFrames();
   }
@@ -417,7 +590,8 @@ class NoraServerSttClient {
       const frame = this.frameQueue.shift();
       const sequence = this.nextSequence;
       this.nextSequence += 1;
-      this.pendingAcks += 1;
+      this.inFlight.set(sequence, frame);
+      this.pendingAcks = this.inFlight.size;
 
       this.ws.send(JSON.stringify({
         type: "chunk",
@@ -456,22 +630,27 @@ class NoraServerSttClient {
       this.flushFrames();
     }
 
+    this.commitRequested = true;
     try {
-      await this.waitForDrain(3000);
+      await this.flushAndCommit();
     } catch (error) {
-      await this.cancel("audio_drain_timeout");
+      await this.cancel("audio_commit_failed");
       throw error;
     }
+  }
+
+  async flushAndCommit() {
+    await this.waitForDrain(8000);
 
     if (
       !this.ws
       || this.ws.readyState !== WebSocket.OPEN
       || !this.streamId
     ) {
-      await this.cancel("stt_socket_unavailable");
-      throw new Error(
-        "Server STT connection is unavailable"
-      );
+      if (!this.reconnecting) {
+        await this.recoverSocket();
+      }
+      return;
     }
 
     this.ws.send(JSON.stringify({
@@ -490,8 +669,9 @@ class NoraServerSttClient {
     const started = performance.now();
     while (
       this.frameQueue.length
-      || this.pendingAcks
+      || this.inFlight.size
     ) {
+      this.pendingAcks = this.inFlight.size;
       this.flushFrames();
       if (
         performance.now() - started
@@ -594,6 +774,8 @@ class NoraServerSttClient {
       this.serverNextSequence = this.nextSequence;
       this.pendingAcks = 0;
       this.frameQueue = [];
+      this.inFlight.clear();
+      this.commitRequested = false;
 
       const resolve = this.openResolve;
       this.clearOpenPromise();
@@ -602,15 +784,32 @@ class NoraServerSttClient {
     }
 
     if (packet.type === "chunk_ack") {
-      this.pendingAcks = Math.max(
-        0,
-        this.pendingAcks - 1,
-      );
-      this.serverNextSequence = (
+      const nextSequence = (
         packet.data?.next_sequence
         ?? this.serverNextSequence
       );
+      this.serverNextSequence = nextSequence;
+      for (const sequence of this.inFlight.keys()) {
+        if (sequence < nextSequence) {
+          this.inFlight.delete(sequence);
+        }
+      }
+      this.pendingAcks = this.inFlight.size;
       this.flushFrames();
+      return;
+    }
+
+    if (packet.type === "stream_reconnected") {
+      const authoritative = (
+        packet.data?.next_sequence
+        ?? this.serverNextSequence
+      );
+      this.reconcileAfterReconnect(
+        authoritative
+      );
+      const resolve = this.reconnectResolve;
+      this.clearReconnectPromise();
+      resolve?.(packet.data);
       return;
     }
 
@@ -670,6 +869,12 @@ class NoraServerSttClient {
         reject(new Error(message));
         return;
       }
+      if (this.reconnectReject) {
+        const reject = this.reconnectReject;
+        this.clearReconnectPromise();
+        reject(new Error(message));
+        return;
+      }
       this.fail(new Error(message));
     }
   }
@@ -682,7 +887,9 @@ class NoraServerSttClient {
     this.serverNextSequence = 0;
     this.pendingAcks = 0;
     this.frameQueue = [];
+    this.inFlight.clear();
     this.pendingPcm = new Int16Array(0);
+    this.commitRequested = false;
   }
 
   async cancel(reason = "client_cancelled") {
