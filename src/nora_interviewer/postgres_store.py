@@ -309,6 +309,14 @@ class PostgresStore:
             deleted = await cursor.fetchone()
         return deleted is not None
 
+    async def ping(self) -> None:
+        await self._ensure_open()
+        async with self._pool.connection() as connection:
+            cursor = await connection.execute("SELECT 1")
+            row = await cursor.fetchone()
+        if row is None or int(row[0]) != 1:
+            raise RuntimeError("PostgreSQL readiness probe failed")
+
     async def close(self) -> None:
         if self._opened:
             await self._pool.close()
