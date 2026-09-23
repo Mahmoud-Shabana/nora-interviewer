@@ -10,7 +10,7 @@ from pydantic import Field
 from .audit import append_event
 from .models import EventType, SessionStatus, StrictModel, ToolInvocation, Turn
 from .service import InterviewService
-from .storage import InMemoryStore
+from .storage import Store
 
 
 class VoicePhase(str, Enum):
@@ -61,7 +61,7 @@ class RealtimeVoiceCoordinator:
     def __init__(
         self,
         service: InterviewService,
-        store: InMemoryStore,
+        store: Store,
         *,
         clock: Callable[[], float] = perf_counter,
     ) -> None:
