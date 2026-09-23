@@ -124,6 +124,7 @@ class EventType(str, Enum):
     VOICE_PROVIDER_FAILED = "voice_provider_failed"
     VOICE_TRANSPORT_SELECTED = "voice_transport_selected"
     VOICE_TRANSPORT_FALLBACK = "voice_transport_fallback"
+    VOICE_VAD_ENDPOINT = "voice_vad_endpoint"
     SESSION_COMPLETED = "session_completed"
     SESSION_CANCELLED = "session_cancelled"
 
