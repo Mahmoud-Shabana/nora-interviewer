@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from .authn import DisabledPrincipalResolver, DevHeaderPrincipalResolver
+from .evidence_ensemble import EvidenceJudgeEnsemble
 from .evidence_judge import DisabledEvidenceJudge, LLMEvidenceJudge
 from .providers.completion import OpenAICompatibleChatProvider
 from .providers.fallback import FallbackBrain
@@ -80,6 +81,63 @@ def build_evidence_judge():
         return LLMEvidenceJudge(
             provider,
             judge_id=f"openai-compatible:{model}",
+        )
+
+    if mode == "ensemble":
+        base_url = os.getenv(
+            "NORA_EVIDENCE_JUDGE_BASE_URL",
+            "",
+        ).strip()
+        raw_models = os.getenv(
+            "NORA_EVIDENCE_JUDGE_MODELS",
+            "",
+        )
+        api_key = os.getenv("NORA_EVIDENCE_JUDGE_API_KEY")
+        raw_threshold = os.getenv(
+            "NORA_EVIDENCE_JUDGE_AGREEMENT_THRESHOLD",
+            str(2 / 3),
+        ).strip()
+
+        models = [
+            item.strip()
+            for item in raw_models.split(",")
+            if item.strip()
+        ]
+        if not base_url or len(models) < 2:
+            raise RuntimeError(
+                "NORA_EVIDENCE_JUDGE_BASE_URL and at least two comma-separated "
+                "NORA_EVIDENCE_JUDGE_MODELS are required when "
+                "NORA_EVIDENCE_JUDGE_MODE=ensemble"
+            )
+        if len(models) != len(set(models)):
+            raise RuntimeError(
+                "NORA_EVIDENCE_JUDGE_MODELS must contain unique model ids"
+            )
+        try:
+            threshold = float(raw_threshold)
+        except ValueError as exc:
+            raise RuntimeError(
+                "NORA_EVIDENCE_JUDGE_AGREEMENT_THRESHOLD must be a number"
+            ) from exc
+        if not 0.5 < threshold <= 1.0:
+            raise RuntimeError(
+                "NORA_EVIDENCE_JUDGE_AGREEMENT_THRESHOLD must be in (0.5, 1.0]"
+            )
+
+        judges = [
+            LLMEvidenceJudge(
+                OpenAICompatibleChatProvider(
+                    base_url=base_url,
+                    model=model,
+                    api_key=api_key,
+                ),
+                judge_id=f"openai-compatible:{model}",
+            )
+            for model in models
+        ]
+        return EvidenceJudgeEnsemble(
+            judges,
+            agreement_threshold=threshold,
         )
 
     raise RuntimeError(
