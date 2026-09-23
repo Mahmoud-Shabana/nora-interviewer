@@ -1148,6 +1148,12 @@ async def voice_transport_capabilities(
         streaming_tts_available=tts_available,
         stt_health=stt_health.state,
         tts_health=tts_health.state,
+        vad_enabled=vad_config is not None,
+        vad_backend=(
+            "pcm16-energy"
+            if vad_config is not None
+            else None
+        ),
         stt_protocol=(
             "nora.stt.v1"
             if stt_enabled
