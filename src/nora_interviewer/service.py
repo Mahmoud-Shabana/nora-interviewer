@@ -25,6 +25,7 @@ from .models import (
     CandidateControlKind,
     CandidateControlRequest,
     CandidateControlResult,
+    CancelSessionRequest,
     CreateSession,
     EvidenceObservation,
     EvidenceState,
@@ -122,7 +123,10 @@ class InterviewService:
 
     async def start(self, session_id: str) -> SessionStep:
         session, job = await self._get(session_id)
-        if session.status is SessionStatus.COMPLETED:
+        if session.status in {
+            SessionStatus.COMPLETED,
+            SessionStatus.CANCELLED,
+        }:
             return SessionStep(session_id=session.id, status=session.status)
         if session.status is SessionStatus.RUNNING and session.turns:
             last = session.turns[-1]
@@ -163,6 +167,8 @@ class InterviewService:
             session, job = await self._get(session_id)
         if session.status is SessionStatus.COMPLETED:
             raise HTTPException(409, "Interview is already complete")
+        if session.status is SessionStatus.CANCELLED:
+            raise HTTPException(409, "Interview is cancelled")
         if session.paused:
             raise HTTPException(409, "Interview is paused; send a resume candidate control first.")
 
@@ -251,6 +257,54 @@ class InterviewService:
             interviewer_turn=interviewer,
             tool_invocation=tool_invocation,
         )
+
+    async def cancel_session(
+        self,
+        session_id: str,
+        request: CancelSessionRequest,
+    ) -> InterviewSession:
+        session, _ = await self._get(session_id)
+
+        if session.status is SessionStatus.COMPLETED:
+            raise HTTPException(
+                409,
+                "Completed interviews cannot be cancelled",
+            )
+        if session.status is SessionStatus.CANCELLED:
+            return session
+
+        cancelled_tools: list[str] = []
+        for tool in session.tools:
+            if tool.status in {
+                ToolStatus.OPEN,
+                ToolStatus.SUBMITTED,
+            }:
+                tool.status = ToolStatus.CANCELLED
+                cancelled_tools.append(tool.id)
+                append_event(
+                    session,
+                    EventType.TOOL_CANCELLED,
+                    payload={
+                        "tool_id": tool.id,
+                        "kind": tool.kind.value,
+                        "reason": "session_cancelled",
+                    },
+                )
+
+        session.paused = False
+        session.status = SessionStatus.CANCELLED
+        session.cancelled_at = datetime.now(timezone.utc)
+        session.cancellation_reason = request.reason
+        append_event(
+            session,
+            EventType.SESSION_CANCELLED,
+            payload={
+                "reason": request.reason,
+                "cancelled_tool_ids": cancelled_tools,
+            },
+        )
+        await self._persist_session(session)
+        return session
 
     async def _judge_candidate_evidence(
         self,
@@ -359,6 +413,8 @@ class InterviewService:
         session, _ = await self._get(session_id)
         if session.status is SessionStatus.COMPLETED:
             raise HTTPException(409, "Interview is already complete")
+        if session.status is SessionStatus.CANCELLED:
+            raise HTTPException(409, "Interview is cancelled")
 
         try:
             result = handle_candidate_control(session, request)
@@ -499,6 +555,8 @@ class InterviewService:
     ) -> ToolInvocation:
         if session.status is SessionStatus.COMPLETED:
             raise HTTPException(409, "Interview is already complete")
+        if session.status is SessionStatus.CANCELLED:
+            raise HTTPException(409, "Interview is cancelled")
         if any(tool.id == invocation.id for tool in session.tools):
             raise HTTPException(409, "Tool invocation id already exists")
 
@@ -548,6 +606,8 @@ class InterviewService:
         session, job = await self._get(session_id)
         if session.status is SessionStatus.COMPLETED:
             raise HTTPException(409, "Interview is already complete")
+        if session.status is SessionStatus.CANCELLED:
+            raise HTTPException(409, "Interview is cancelled")
 
         invocation = next((tool for tool in session.tools if tool.id == tool_id), None)
         if invocation is None:
