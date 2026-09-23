@@ -10,6 +10,7 @@ const state = {
   recognition: null,
   listening: false,
   paused: false,
+  currentTool: null,
 };
 
 function slugify(text, i) {
@@ -40,9 +41,9 @@ function addMessage(kind, text, metadata = "") {
 
 function setThinking(on) {
   $("typing").classList.toggle("hidden", !on);
-  $("answerBox").disabled = on;
-  document.querySelector(".send").disabled = on;
-  $("micBtn").disabled = on;
+  $("answerBox").disabled = on || state.paused;
+  document.querySelector(".send").disabled = on || state.paused;
+  $("micBtn").disabled = on || state.paused;
 }
 
 function browserSpeechRecognition() {
@@ -121,6 +122,74 @@ function updateCoverage(tags = []) {
   document.querySelectorAll("[data-competency]").forEach((chip) => {
     if (covered.has(chip.dataset.competency)) chip.classList.add("done");
   });
+}
+
+function openToolWorkspace(tool) {
+  state.currentTool = tool;
+  $("toolWorkspace").classList.remove("hidden");
+  $("reopenToolBtn").classList.add("hidden");
+  $("toolKind").textContent = (tool.kind || "tool").replaceAll("_", " ").toUpperCase();
+  $("toolTitle").textContent = tool.title || "Practical task";
+  $("toolInstructions").textContent = tool.instructions || "";
+  $("toolStatus").textContent = "Not submitted";
+  $("toolResult").classList.add("hidden");
+  $("toolResult").textContent = "";
+
+  const editor = $("toolEditor");
+  if (tool.kind === "coding") {
+    editor.value = tool.payload?.starter_code || "";
+    editor.placeholder = "Write your solution here…";
+    editor.classList.add("code-editor");
+    const tests = tool.payload?.public_tests || [];
+    $("toolTests").classList.toggle("hidden", tests.length === 0);
+    $("toolTestList").innerHTML = "";
+    for (const test of tests) {
+      const li = document.createElement("li");
+      li.textContent = test;
+      $("toolTestList").appendChild(li);
+    }
+  } else {
+    editor.value = "";
+    editor.placeholder = "Enter your response or artifact notes here…";
+    editor.classList.remove("code-editor");
+    $("toolTests").classList.add("hidden");
+  }
+}
+
+async function submitCurrentTool() {
+  const tool = state.currentTool;
+  if (!tool || !state.session) return;
+
+  const content = tool.kind === "coding"
+    ? {code: $("toolEditor").value}
+    : {answer: $("toolEditor").value};
+
+  $("submitToolBtn").disabled = true;
+  $("toolStatus").textContent = "Evaluating…";
+  try {
+    const evaluation = await jsonFetch(
+      `/v1/sessions/${state.session.id}/tools/${tool.id}/submit`,
+      {
+        method: "POST",
+        body: JSON.stringify({content}),
+      },
+    );
+    const result = $("toolResult");
+    result.classList.remove("hidden");
+    const score = evaluation.score == null
+      ? ""
+      : ` · ${Math.round(evaluation.score * 100)}%`;
+    result.textContent = `${evaluation.summary}${score}`;
+    $("toolStatus").textContent = evaluation.passed === true
+      ? "Completed"
+      : evaluation.passed === false
+        ? "Needs review"
+        : "Submitted for review";
+  } catch (error) {
+    $("toolStatus").textContent = "Submission failed";
+    setConnection(error.message, true);
+    $("submitToolBtn").disabled = false;
+  }
 }
 
 function updateProgress(turn) {
@@ -227,6 +296,11 @@ function connectSocket() {
       }
       return;
     }
+    if (packet.type === "tool_opened") {
+      openToolWorkspace(packet.data);
+      setConnection("Practical task opened");
+      return;
+    }
     if (packet.type === "interviewer_turn") {
       setThinking(false);
       const turn = packet.data;
@@ -306,6 +380,17 @@ document.querySelectorAll("[data-control]").forEach((button) => {
 $("exportBtn").addEventListener("click", exportTrace);
 $("voiceBtn").addEventListener("click", toggleVoice);
 $("micBtn").addEventListener("click", toggleMic);
+$("submitToolBtn").addEventListener("click", submitCurrentTool);
+$("minimizeToolBtn").addEventListener("click", () => {
+  $("toolWorkspace").classList.add("hidden");
+  if (state.currentTool) $("reopenToolBtn").classList.remove("hidden");
+});
+$("reopenToolBtn").addEventListener("click", () => {
+  if (state.currentTool) {
+    $("toolWorkspace").classList.remove("hidden");
+    $("reopenToolBtn").classList.add("hidden");
+  }
+});
 $("restartBtn").addEventListener("click", () => location.reload());
 
 if (!browserSpeechRecognition()) {
