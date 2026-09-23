@@ -150,6 +150,7 @@ async function createInterview(event) {
       id: slugify(description, i),
       description,
       weight: 1,
+      anchor_question: `Tell me about a concrete example that demonstrates ${description}. What was your role and what evidence shows the result?`,
     }));
 
     state.job = await jsonFetch("/v1/jobs", {
@@ -208,7 +209,9 @@ function connectSocket() {
     if (packet.type === "interviewer_turn") {
       setThinking(false);
       const turn = packet.data;
-      addMessage("nora", turn.text, turn.competency_tags?.join(" · ") || "Nora");
+      const lane = turn.metadata?.question_lane ? turn.metadata.question_lane.toUpperCase() : "NORA";
+      const tags = turn.competency_tags?.join(" · ");
+      addMessage("nora", turn.text, [lane, tags].filter(Boolean).join(" · "));
       speak(turn.text);
       updateProgress(turn);
       $("answerBox").focus();
