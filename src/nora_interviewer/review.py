@@ -69,6 +69,15 @@ class RecruiterSessionReport(StrictModel):
     )
 
 
+class ReviewDashboardSummary(StrictModel):
+    total_sessions: int = Field(ge=0)
+    review_required: int = Field(ge=0)
+    pending_appeals: int = Field(ge=0)
+    pending_integrity_signals: int = Field(ge=0)
+    unresolved_tools: int = Field(ge=0)
+    completed_sessions: int = Field(ge=0)
+
+
 class ReviewQueueItem(StrictModel):
     session_id: str
     job_id: str
