@@ -75,8 +75,8 @@ class RecruiterSessionReport(StrictModel):
     pending_appeals: int = Field(ge=0)
     integrity_signals: int = Field(ge=0)
     unresolved_tools: int = Field(ge=0)
-    stale_evidence_runs: int = Field(ge=0)
-    failed_evidence_runs: int = Field(ge=0)
+    stale_evidence_runs: int = Field(default=0, ge=0)
+    failed_evidence_runs: int = Field(default=0, ge=0)
     transcript_revisions: int = Field(ge=0)
     requires_human_review: bool
     note: str = (
@@ -91,8 +91,8 @@ class ReviewDashboardSummary(StrictModel):
     pending_appeals: int = Field(ge=0)
     pending_integrity_signals: int = Field(ge=0)
     unresolved_tools: int = Field(ge=0)
-    stale_evidence_runs: int = Field(ge=0)
-    failed_evidence_runs: int = Field(ge=0)
+    stale_evidence_runs: int = Field(default=0, ge=0)
+    failed_evidence_runs: int = Field(default=0, ge=0)
     completed_sessions: int = Field(ge=0)
 
 
@@ -107,8 +107,8 @@ class ReviewQueueItem(StrictModel):
     pending_appeals: int = Field(ge=0)
     integrity_signals: int = Field(ge=0)
     unresolved_tools: int = Field(ge=0)
-    stale_evidence_runs: int = Field(ge=0)
-    failed_evidence_runs: int = Field(ge=0)
+    stale_evidence_runs: int = Field(default=0, ge=0)
+    failed_evidence_runs: int = Field(default=0, ge=0)
 
 
 def build_recruiter_report(
