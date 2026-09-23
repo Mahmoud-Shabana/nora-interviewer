@@ -1,5 +1,12 @@
 const $ = (id) => document.getElementById(id);
 
+const TOOL_PURPOSES = {
+  "python-dedupe-events-v1": "Validate implementation quality, edge cases, and reasoning with code.",
+  "system-design-burst-api-v1": "Collect practical evidence about architecture trade-offs and failure handling.",
+  "whiteboard-service-map-v1": "Assess how clearly the candidate communicates components, boundaries, and data flow.",
+  "document-incident-review-v1": "Assess evidence separation, uncertainty handling, and remediation reasoning.",
+};
+
 const state = {
   job: null,
   session: null,
@@ -247,6 +254,14 @@ async function createInterview(event) {
       anchor_question: `Tell me about a concrete example that demonstrates ${description}. What was your role and what evidence shows the result?`,
     }));
 
+    const allowedCompetencies = state.competencies.map(item => item.id);
+    const toolTemplates = [...document.querySelectorAll("[data-tool-template]:checked")]
+      .map((input) => ({
+        template_id: input.dataset.toolTemplate,
+        purpose: TOOL_PURPOSES[input.dataset.toolTemplate],
+        competency_ids: allowedCompetencies,
+      }));
+
     state.job = await jsonFetch("/v1/jobs", {
       method: "POST",
       body: JSON.stringify({
@@ -254,6 +269,8 @@ async function createInterview(event) {
         description: `Structured interview for ${$("roleTitle").value.trim()}`,
         competencies: state.competencies,
         max_questions: Math.max(6, state.competencies.length * 2),
+        tool_templates: toolTemplates,
+        max_tools: Number($("maxTools").value),
       }),
     });
 
