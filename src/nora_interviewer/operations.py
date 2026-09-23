@@ -17,6 +17,7 @@ from .provider_health import (
 )
 from .review import ReviewDashboardSummary
 from .review_service import ReviewService
+from .slo import OperationalSloAssessment
 from .storage import Store
 from .voice_output_bridge import VoiceOutputBridge
 from .websocket_metrics import (
@@ -146,6 +147,7 @@ def _label(value: str) -> str:
 
 def render_prometheus(
     snapshot: OperationalSnapshot,
+    slo: OperationalSloAssessment | None = None,
 ) -> str:
     """Render a bounded-label Prometheus 0.0.4 text exposition."""
 
@@ -322,5 +324,39 @@ def render_prometheus(
             "nora_websocket_connection_duration_seconds_sum"
             f"{{{label}}} {channel.duration_seconds_sum:g}"
         )
+
+    if slo is not None:
+        lines.extend([
+            "# HELP nora_operational_slo_status Current operational SLO state.",
+            "# TYPE nora_operational_slo_status gauge",
+        ])
+        for status in (
+            "healthy",
+            "degraded",
+            "breached",
+        ):
+            lines.append(
+                "nora_operational_slo_status"
+                f'{{status="{status}"}} '
+                f"{1 if slo.status.value == status else 0}"
+            )
+
+        lines.extend([
+            "# HELP nora_operational_slo_signal Active bounded operational SLO signals.",
+            "# TYPE nora_operational_slo_signal gauge",
+        ])
+        for signal in slo.signals:
+            labels = (
+                f'code="{_label(signal.code)}",'
+                f'severity="{_label(signal.severity.value)}"'
+            )
+            lines.append(
+                f"nora_operational_slo_signal{{{labels}}} 1"
+            )
+
+        lines.extend([
+            "# TYPE nora_http_5xx_ratio gauge",
+            f"nora_http_5xx_ratio {slo.http_5xx_ratio:g}",
+        ])
 
     return "\n".join(lines) + "\n"
