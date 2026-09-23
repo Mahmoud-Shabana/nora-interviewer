@@ -809,7 +809,16 @@ class InterviewService:
             session.events
         )
         audit_events = [
-            event.model_dump(mode="json")
+            {
+                "seq": event.seq,
+                "type": event.type.value,
+                "turn_id": event.turn_id,
+                "payload": event.payload,
+                "created_at": event.created_at.isoformat(),
+                "hash_version": event.hash_version,
+                "prev_hash": event.prev_hash,
+                "event_hash": event.event_hash,
+            }
             for event in session.events
         ]
         return VoxRubricTrace(
