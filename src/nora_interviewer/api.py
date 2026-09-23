@@ -108,22 +108,53 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/v1/jobs", response_model=JobSpec, status_code=201)
-async def create_job(job: JobSpec) -> JobSpec:
+async def create_job(
+    job: JobSpec,
+    principal: Principal = Depends(current_principal),
+) -> JobSpec:
+    require_global_permission(
+        principal,
+        Permission.CREATE_JOB,
+    )
     return await service.create_job(job)
 
 
 @app.post("/v1/sessions", response_model=InterviewSession, status_code=201)
-async def create_session(request: CreateSession) -> InterviewSession:
+async def create_session(
+    request: CreateSession,
+    principal: Principal = Depends(current_principal),
+) -> InterviewSession:
+    require_global_permission(
+        principal,
+        Permission.CREATE_SESSION,
+    )
     return await service.create_session(request)
 
 
 @app.post("/v1/sessions/{session_id}/start", response_model=SessionStep)
-async def start_session(session_id: str) -> SessionStep:
+async def start_session(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> SessionStep:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.RUN_INTERVIEW,
+    )
     return await service.start(session_id)
 
 
 @app.post("/v1/sessions/{session_id}/responses", response_model=SessionStep)
-async def submit_response(session_id: str, response: CandidateResponse) -> SessionStep:
+async def submit_response(
+    session_id: str,
+    response: CandidateResponse,
+    principal: Principal = Depends(current_principal),
+) -> SessionStep:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.RUN_INTERVIEW,
+    )
     return await service.answer(session_id, response.text)
 
 
@@ -134,7 +165,13 @@ async def submit_response(session_id: str, response: CandidateResponse) -> Sessi
 async def candidate_control(
     session_id: str,
     request: CandidateControlRequest,
+    principal: Principal = Depends(current_principal),
 ) -> CandidateControlResult:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.CANDIDATE_CONTROL,
+    )
     return await service.candidate_control(session_id, request)
 
 
