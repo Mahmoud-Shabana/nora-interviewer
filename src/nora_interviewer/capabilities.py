@@ -36,6 +36,9 @@ class SystemCapabilities(StrictModel):
     streaming_tts_backend: str = "DisabledStreamingTtsProvider"
     rubric_drafter_enabled: bool = False
     rubric_drafter_backend: str = "DisabledRubricDrafter"
+    rubric_draft_persistence: bool = True
+    rubric_human_approval: bool = True
+    job_rubric_provenance: bool = True
     voxrubric_export: bool = True
 
 
