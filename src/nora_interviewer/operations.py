@@ -150,6 +150,12 @@ def render_prometheus(
         "nora_failed_evidence_runs": (
             review.failed_evidence_runs
         ),
+        "nora_assigned_reviews": (
+            review.assigned_reviews
+        ),
+        "nora_unassigned_review_required": (
+            review.unassigned_review_required
+        ),
         "nora_active_audio_streams": (
             snapshot.active_audio_streams
         ),
