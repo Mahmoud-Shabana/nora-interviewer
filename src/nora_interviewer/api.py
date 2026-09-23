@@ -272,6 +272,28 @@ app = FastAPI(
 app.mount("/assets", StaticFiles(directory=WEB_DIR), name="assets")
 
 
+@app.middleware("http")
+async def correlation_id_middleware(
+    request: Request,
+    call_next,
+):
+    correlation_id = resolve_correlation_id(
+        request.headers.get("x-request-id"),
+        prefix="req",
+    )
+    token = set_correlation_id(
+        correlation_id
+    )
+    try:
+        response = await call_next(request)
+        response.headers[
+            "X-Request-ID"
+        ] = correlation_id
+        return response
+    finally:
+        reset_correlation_id(token)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home() -> HTMLResponse:
     return HTMLResponse(render_interview_room())
@@ -1143,6 +1165,12 @@ async def voice_tts_cancelled(
 
 @app.websocket("/v1/ws/interviews/{session_id}")
 async def interview_socket(websocket: WebSocket, session_id: str) -> None:
+    set_correlation_id(
+        resolve_correlation_id(
+            websocket.headers.get("x-request-id"),
+            prefix="ws",
+        )
+    )
     try:
         principal = principal_resolver.resolve(websocket.headers)
         session = await store.get_session(session_id)
@@ -1470,6 +1498,12 @@ async def tts_socket(
     websocket: WebSocket,
     session_id: str,
 ) -> None:
+    set_correlation_id(
+        resolve_correlation_id(
+            websocket.headers.get("x-request-id"),
+            prefix="ws",
+        )
+    )
     try:
         principal = principal_resolver.resolve(
             websocket.headers
@@ -1708,6 +1742,12 @@ async def audio_socket(
     websocket: WebSocket,
     session_id: str,
 ) -> None:
+    set_correlation_id(
+        resolve_correlation_id(
+            websocket.headers.get("x-request-id"),
+            prefix="ws",
+        )
+    )
     try:
         principal = principal_resolver.resolve(
             websocket.headers
