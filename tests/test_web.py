@@ -52,4 +52,7 @@ def test_job_studio_and_assets_are_served():
     js = client.get("/assets/studio.js")
     assert js.status_code == 200
     assert "/v1/rubrics/draft" in js.text
-    assert "/v1/jobs" in js.text
+    assert "/v1/rubrics/drafts/" in js.text
+    assert "/approve" in js.text
+    assert 'jsonFetch("/v1/jobs"' not in js.text
+    assert "\\n\\nconst state" not in js.text
