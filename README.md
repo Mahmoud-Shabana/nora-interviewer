@@ -650,6 +650,23 @@ export NORA_STORE_MODE=sqlite
 export NORA_SQLITE_PATH=.nora/nora.db
 ```
 
+### Multi-instance PostgreSQL mode
+
+```bash
+pip install -e '.[postgres]'
+export NORA_STORE_MODE=postgres
+export NORA_POSTGRES_DSN=postgresql://nora:password@postgres.example/nora
+```
+
+PostgreSQL uses async connection pooling, JSONB session documents, and database-level optimistic compare-and-swap.
+
+Liveness and storage readiness are separate:
+
+```text
+GET /health
+GET /health/ready
+```
+
 See [Storage Backends](docs/STORAGE.md).
 
 ## Session concurrency
@@ -1007,7 +1024,9 @@ Nora is intentionally conservative around high-stakes behavior.
 - [x] REST + WebSocket authorization boundary
 - [x] JWT/JWKS signature + issuer + audience authentication
 - [x] Durable local SQLite store
-- [x] Configurable memory/SQLite persistence
+- [x] Async PostgreSQL multi-instance store
+- [x] Configurable memory/SQLite/PostgreSQL persistence
+- [x] Storage-backed readiness probe
 - [x] Session creation/completion timestamps
 - [x] Backend-neutral retention manager
 - [x] Service-only dry-run-first retention API
@@ -1032,7 +1051,6 @@ Nora is intentionally conservative around high-stakes behavior.
 - [ ] VAD and audio chunk transport
 - [ ] Reconnect / backpressure handling
 - [ ] Organization-specific OIDC login/session integration
-- [ ] PostgreSQL multi-instance persistence
 - [ ] encrypted object storage
 - [ ] retention controls
 - [ ] external sandbox service
