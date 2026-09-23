@@ -84,6 +84,7 @@ class EventType(str, Enum):
     TRANSCRIPT_CORRECTED = "transcript_corrected"
     APPEAL_SUBMITTED = "appeal_submitted"
     EVIDENCE_OBSERVED = "evidence_observed"
+    EVIDENCE_JUDGE_FAILED = "evidence_judge_failed"
     INTEGRITY_SIGNAL = "integrity_signal"
     TOOL_OPENED = "tool_opened"
     TOOL_SUBMITTED = "tool_submitted"
@@ -179,6 +180,7 @@ class EvidenceItem(StrictModel):
     turn_id: str
     state: EvidenceState
     confidence: float = Field(ge=0.0, le=1.0)
+    quote: str | None = Field(default=None, max_length=4000)
     note: str = Field(min_length=1)
     source: str = "interview"
 
@@ -329,6 +331,7 @@ class EvidenceObservation(StrictModel):
     turn_id: str
     state: EvidenceState
     confidence: float = Field(ge=0.0, le=1.0)
+    quote: str | None = Field(default=None, max_length=4000)
     note: str = Field(min_length=1)
     source: str = Field(default="evaluator", min_length=1, max_length=160)
 
