@@ -16,6 +16,7 @@ from .config import (
 from .counterfactual import CounterfactualReplayReport
 from .feedback import CandidateFeedbackReport
 from .models import (
+    AppealReviewRequest,
     CandidateAppeal,
     CandidateAppealRequest,
     CandidateControlRequest,
@@ -351,6 +352,31 @@ async def submit_appeal(
         Permission.SUBMIT_APPEAL,
     )
     return await service.submit_appeal(session_id, request)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/appeals/{appeal_id}/review",
+    response_model=CandidateAppeal,
+)
+async def review_appeal(
+    session_id: str,
+    appeal_id: str,
+    request: AppealReviewRequest,
+    principal: Principal = Depends(current_principal),
+) -> CandidateAppeal:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.REVIEW_APPEAL,
+    )
+    return await service.review_appeal(
+        session_id,
+        appeal_id,
+        AppealReviewRequest(
+            reviewer_id=principal.id,
+            note=request.note,
+        ),
+    )
 
 
 @app.post(
