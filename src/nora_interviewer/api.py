@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import build_brain
+from .feedback import CandidateFeedbackReport
 from .models import (
     CandidateAppeal,
     CandidateAppealRequest,
@@ -120,6 +121,14 @@ async def observe_evidence(
     observation: EvidenceObservation,
 ) -> CompetencyEvidence:
     return await service.observe_evidence(session_id, observation)
+
+
+@app.get(
+    "/v1/sessions/{session_id}/feedback",
+    response_model=CandidateFeedbackReport,
+)
+async def candidate_feedback(session_id: str) -> CandidateFeedbackReport:
+    return await service.candidate_feedback(session_id)
 
 
 @app.get(
