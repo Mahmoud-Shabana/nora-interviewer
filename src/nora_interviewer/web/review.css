@@ -13,5 +13,5 @@
 .appeal-card,.integrity-card{border:1px solid var(--line);border-radius:13px;padding:14px;background:var(--panel2)}
 .appeal-head,.integrity-head{display:flex;justify-content:space-between;gap:12px;align-items:center}.appeal-head strong,.integrity-head strong{text-transform:capitalize}.appeal-head span,.integrity-head span{font-size:10px;color:var(--muted)}
 .appeal-card>p,.integrity-card>p{color:var(--soft);font-size:12px;line-height:1.55}.integrity-card>small{color:var(--warn)}
-.resolve-appeal{border:1px solid #356252;background:rgba(139,233,199,.08);color:var(--accent);border-radius:9px;padding:8px 10px;cursor:pointer}
+.resolve-appeal,.resolve-integrity{border:1px solid #356252;background:rgba(139,233,199,.08);color:var(--accent);border-radius:9px;padding:8px 10px;cursor:pointer}
 .review-resolution{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}.review-resolution small{color:var(--accent)}.review-resolution p{color:var(--muted);font-size:11px;margin:5px 0 0}
