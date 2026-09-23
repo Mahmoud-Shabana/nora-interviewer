@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from .coding import CodingChallengeRequest
 from .config import build_brain
 from .feedback import CandidateFeedbackReport
 from .models import (
@@ -82,6 +83,18 @@ async def candidate_control(
     request: CandidateControlRequest,
 ) -> CandidateControlResult:
     return await service.candidate_control(session_id, request)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/coding-challenges",
+    response_model=ToolInvocation,
+    status_code=201,
+)
+async def open_coding_challenge(
+    session_id: str,
+    request: CodingChallengeRequest,
+) -> ToolInvocation:
+    return await service.open_coding_challenge(session_id, request)
 
 
 @app.post(
