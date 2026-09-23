@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .coding import CodingChallengeRequest
-from .config import build_brain
+from .config import build_brain, build_evidence_judge
 from .counterfactual import CounterfactualReplayReport
 from .feedback import CandidateFeedbackReport
 from .models import (
@@ -43,7 +43,11 @@ from .voice import (
 from .web import WEB_DIR, render_interview_room
 
 store = InMemoryStore()
-service = InterviewService(store=store, brain=build_brain())
+service = InterviewService(
+    store=store,
+    brain=build_brain(),
+    evidence_judge=build_evidence_judge(),
+)
 voice = RealtimeVoiceCoordinator(service=service, store=store)
 app = FastAPI(
     title="Nora Interviewer",
