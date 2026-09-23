@@ -86,6 +86,8 @@ from .voice import (
     TranscriptEvent,
     TtsLifecycleEvent,
     VoiceSessionState,
+    VoiceTransportFallbackEvent,
+    VoiceTransportSelectionEvent,
     VoiceTurnResult,
 )
 from .voice_stream import (
@@ -1149,6 +1151,44 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
                     )
                 continue
 
+            if event_type == "voice_transport_selected":
+                AccessPolicy.require(
+                    principal,
+                    Permission.USE_VOICE,
+                    session=session,
+                )
+                selection = VoiceTransportSelectionEvent.model_validate(
+                    event.get("data", {})
+                )
+                await voice.transport_selected(
+                    session_id,
+                    selection,
+                )
+                await websocket.send_json({
+                    "type": "voice_transport_ack",
+                    "data": selection.model_dump(mode="json"),
+                })
+                continue
+
+            if event_type == "voice_transport_fallback":
+                AccessPolicy.require(
+                    principal,
+                    Permission.USE_VOICE,
+                    session=session,
+                )
+                fallback = VoiceTransportFallbackEvent.model_validate(
+                    event.get("data", {})
+                )
+                await voice.transport_fallback(
+                    session_id,
+                    fallback,
+                )
+                await websocket.send_json({
+                    "type": "voice_transport_ack",
+                    "data": fallback.model_dump(mode="json"),
+                })
+                continue
+
             if event_type == "voice_speech_started":
                 AccessPolicy.require(
                     principal,
@@ -1244,7 +1284,7 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
                     {
                         "type": "error",
                         "error": (
-                            "Expected candidate_text, candidate_control, or voice event."
+                            "Expected candidate_text, candidate_control, or supported voice event."
                         ),
                     }
                 )
