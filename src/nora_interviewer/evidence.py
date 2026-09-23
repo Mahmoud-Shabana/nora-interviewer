@@ -89,6 +89,7 @@ class EvidenceGraph:
             turn_id=observation.turn_id,
             state=observation.state,
             confidence=observation.confidence,
+            quote=observation.quote,
             note=observation.note,
             source=observation.source,
         )
