@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from pydantic import Field
 
 from .audit import append_event
-from .models import EventType, SessionStatus, StrictModel, Turn
+from .models import EventType, SessionStatus, StrictModel, ToolInvocation, Turn
 from .service import InterviewService
 from .storage import InMemoryStore
 
@@ -46,6 +46,7 @@ class VoiceSessionState(StrictModel):
 class VoiceTurnResult(StrictModel):
     state: VoiceSessionState
     interviewer_turn: Turn | None = None
+    tool_invocation: ToolInvocation | None = None
     completed: bool = False
 
 
@@ -214,6 +215,7 @@ class RealtimeVoiceCoordinator:
         return VoiceTurnResult(
             state=state.model_copy(deep=True),
             interviewer_turn=step.interviewer_turn,
+            tool_invocation=step.tool_invocation,
             completed=step.status is SessionStatus.COMPLETED,
         )
 
