@@ -276,6 +276,40 @@ class InterviewService:
                 response=response,
                 judge_id=self.evidence_judge.judge_id,
             )
+
+            audit = response.audit
+            if audit.get("kind") == "evidence_judge_ensemble":
+                disagreements = [
+                    item
+                    for item in audit.get("competencies", [])
+                    if isinstance(item, dict)
+                    and not item.get("threshold_met", False)
+                ]
+                subjudge_failures = [
+                    item
+                    for item in audit.get("failures", [])
+                    if isinstance(item, dict)
+                ]
+                if disagreements or subjudge_failures:
+                    append_event(
+                        session,
+                        EventType.EVIDENCE_JUDGE_DISAGREEMENT,
+                        turn=answer,
+                        payload={
+                            "judge_id": self.evidence_judge.judge_id,
+                            "question_turn_id": question.id,
+                            "answer_turn_id": answer.id,
+                            "agreement_threshold": audit.get(
+                                "agreement_threshold"
+                            ),
+                            "required_votes": audit.get(
+                                "required_votes"
+                            ),
+                            "disagreements": disagreements,
+                            "subjudge_failures": subjudge_failures,
+                        },
+                    )
+
             for observation in observations:
                 item = EvidenceGraph.apply_observation(
                     session,
