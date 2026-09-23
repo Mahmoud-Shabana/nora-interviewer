@@ -108,3 +108,37 @@ def test_sqlite_store_upserts_updated_session(tmp_path):
         assert loaded.asked_questions == 3
 
     run(scenario())
+
+
+def test_sqlite_store_lists_and_deletes_sessions(tmp_path):
+    async def scenario():
+        path = tmp_path / "nora.db"
+        store = SqliteStore(path)
+
+        first = InterviewSession(
+            id="session-a",
+            job_id="job",
+            candidate_ref="a",
+            locale="en",
+        )
+        second = InterviewSession(
+            id="session-b",
+            job_id="job",
+            candidate_ref="b",
+            locale="en",
+        )
+        await store.put_session(first)
+        await store.put_session(second)
+
+        listed = await store.list_sessions()
+        assert {item.id for item in listed} == {
+            "session-a",
+            "session-b",
+        }
+
+        assert await store.delete_session("session-a") is True
+        assert await store.delete_session("session-a") is False
+        assert await store.get_session("session-a") is None
+        assert await store.get_session("session-b") is not None
+
+    run(scenario())
