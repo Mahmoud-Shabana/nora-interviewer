@@ -5,6 +5,7 @@ from pydantic import Field
 from .models import (
     AppealStatus,
     EvidenceState,
+    IntegrityReviewStatus,
     InterviewSession,
     JobSpec,
     StrictModel,
@@ -42,6 +43,9 @@ class IntegrityReviewSummary(StrictModel):
     confidence: float = Field(ge=0.0, le=1.0)
     note: str
     requires_human_review: bool = True
+    review_status: IntegrityReviewStatus
+    reviewed_by: str | None = None
+    review_note: str | None = None
 
 
 class RecruiterSessionReport(StrictModel):
@@ -157,17 +161,23 @@ def build_recruiter_report(
             confidence=item.confidence,
             note=item.note,
             requires_human_review=item.requires_human_review,
+            review_status=item.review_status,
+            reviewed_by=item.reviewed_by,
+            review_note=item.review_note,
         )
         for item in session.integrity_signals
     ]
-    integrity_signals = len(integrity)
+    integrity_signals = sum(
+        item.review_status is IntegrityReviewStatus.PENDING
+        for item in session.integrity_signals
+    )
     if integrity_signals:
         reasons.append(
             ReviewReason(
                 code="integrity_signal",
                 severity="high",
                 summary=(
-                    f"{integrity_signals} integrity signal(s) require human review."
+                    f"{integrity_signals} pending integrity signal(s) require human review."
                 ),
             )
         )
