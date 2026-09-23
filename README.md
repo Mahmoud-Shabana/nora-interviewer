@@ -69,7 +69,7 @@ It separates:
 | Realtime voice state machine | ✅ Implemented |
 | Barge-in / interruption flow | ✅ Implemented |
 | Replay / counterfactual analysis | ✅ Implemented |
-| Independent semantic Evidence Judge | 🚧 In progress |
+| Independent semantic Evidence Judge | ✅ Implemented (experimental) |
 | Production streaming STT/TTS adapters | 🧭 Planned |
 | Durable production persistence | 🧭 Planned |
 | Recruiter/candidate authorization | 🧭 Planned |
@@ -501,11 +501,11 @@ Feedback can link back to interview turns and explicitly states that it is **not
 
 # 🔬 Independent Evidence Judge
 
-> 🚧 **Work in progress on main**
+> ✅ **Implemented on main as an experimental independent evaluation layer**
 
-The semantic Evidence Judge is being separated from the Interview Brain.
+The semantic Evidence Judge is separate from the Interview Brain and can use different provider credentials and a different model.
 
-Target flow:
+Flow:
 
 ```mermaid
 flowchart TD
@@ -519,9 +519,14 @@ flowchart TD
 Design constraints:
 
 - interviewer model and evaluator model are separate roles;
-- judge quotes must exist in the referenced candidate turn;
-- unsupported quotes are rejected;
-- transcript-only evidence cannot silently become `verified`.
+- judge configuration is independent from `NORA_LLM_*`;
+- judge quotes must exist literally in the referenced candidate turn;
+- `demonstrated` and `contradicted` require grounded quotes;
+- unsupported quotes are rejected twice: at the grounding gate and Evidence Graph;
+- transcript-only semantic evidence cannot become `verified`;
+- provider/schema/grounding failures are audited as `evidence_judge_failed` and do not terminate the interview.
+
+See [Independent Evidence Judge](docs/EVIDENCE_JUDGE.md).
 
 ---
 
@@ -819,6 +824,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Interview Protocol](docs/INTERVIEW_PROTOCOL.md)
 - [Candidate Rights](docs/CANDIDATE_RIGHTS.md)
 - [Realtime Voice Protocol](docs/VOICE_PROTOCOL.md)
+- [Independent Evidence Judge](docs/EVIDENCE_JUDGE.md)
 - [VoxRubric](https://github.com/Mahmoud-Shabana/voxrubric)
 
 ---
@@ -849,11 +855,15 @@ Nora is intentionally conservative around high-stakes behavior.
 - [x] Barge-in recovery model
 - [x] Voice latency instrumentation
 - [x] VoxRubric export
+- [x] Independent semantic Evidence Judge
+- [x] Strict literal quote grounding
+- [x] Non-fatal semantic judge failure audit
+- [x] Independent judge provider configuration
 
 ## 🚧 In progress
 
-- [ ] Independent semantic Evidence Judge
-- [ ] Strict quote-grounded semantic observations
+- [ ] Semantic evidence calibration benchmark packs
+- [ ] Multi-judge evidence disagreement analysis
 
 ## 🧭 Next
 
