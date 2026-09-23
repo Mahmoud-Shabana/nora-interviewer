@@ -166,6 +166,23 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/health/ready")
+async def readiness() -> dict[str, str]:
+    try:
+        await store.ping()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Storage backend is not ready",
+        ) from exc
+
+    return {
+        "status": "ready",
+        "storage": type(store).__name__,
+        "api_version": API_VERSION,
+    }
+
+
 @app.get(
     "/v1/system/capabilities",
     response_model=SystemCapabilities,
