@@ -23,8 +23,8 @@ from .models import (
     InterviewSession,
     JobSpec,
     SessionStep,
-    ToolEvaluation,
     ToolInvocation,
+    ToolStep,
     ToolSubmissionRequest,
     TranscriptCorrectionRequest,
     TranscriptRevision,
@@ -112,13 +112,13 @@ async def open_tool(
 
 @app.post(
     "/v1/sessions/{session_id}/tools/{tool_id}/submit",
-    response_model=ToolEvaluation,
+    response_model=ToolStep,
 )
 async def submit_tool(
     session_id: str,
     tool_id: str,
     request: ToolSubmissionRequest,
-) -> ToolEvaluation:
+) -> ToolStep:
     return await service.submit_tool(session_id, tool_id, request)
 
 
