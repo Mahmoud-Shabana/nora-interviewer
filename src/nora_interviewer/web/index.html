@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nora Interviewer</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark">N</div>
+        <div>
+          <strong>Nora Interviewer</strong>
+          <span>Adaptive AI interview room</span>
+        </div>
+      </div>
+      <div class="status" id="connectionStatus"><i></i><span>Ready</span></div>
+    </header>
+
+    <section class="hero" id="setupPanel">
+      <div class="hero-copy">
+        <p class="eyebrow">AUDITABLE · ADAPTIVE · MULTILINGUAL</p>
+        <h1>Run a structured interview without turning hiring into a black box.</h1>
+        <p class="lede">Nora tracks competencies, asks traceable follow-ups, and exports every session into VoxRubric for independent evaluation.</p>
+        <div class="principles">
+          <span>Evidence-linked</span>
+          <span>Human-reviewed</span>
+          <span>Provider-neutral</span>
+        </div>
+      </div>
+
+      <form class="setup-card" id="setupForm">
+        <div class="card-heading">
+          <span class="step">01</span>
+          <div><strong>Start an interview</strong><small>Create a local demo role and candidate session.</small></div>
+        </div>
+        <label>Role title<input id="roleTitle" value="Senior Python Engineer" required></label>
+        <label>Candidate reference<input id="candidateRef" value="candidate-demo" required></label>
+        <label>Interview language
+          <select id="locale">
+            <option value="en">English</option>
+            <option value="ar-SA">العربية + English</option>
+          </select>
+        </label>
+        <label>Competencies<textarea id="competencies" rows="4">Python engineering
+Production debugging
+System design
+Technical communication</textarea></label>
+        <div class="consent">
+          <label><input type="checkbox" id="consentAI" checked> I consent to an AI-led interview.</label>
+          <label><input type="checkbox" id="consentTranscript" checked> I consent to transcript processing for this demo.</label>
+        </div>
+        <button class="primary" type="submit">Enter interview room <span>→</span></button>
+        <p class="fineprint">Demo state is held in memory and is lost when the server restarts.</p>
+      </form>
+    </section>
+
+    <section class="room hidden" id="roomPanel">
+      <aside class="sidebar">
+        <div class="session-card">
+          <span class="eyebrow">LIVE SESSION</span>
+          <h2 id="roomRole">Interview</h2>
+          <p id="roomCandidate"></p>
+          <div class="meter"><span id="questionMeter"></span></div>
+          <div class="session-meta"><span id="questionCount">0 questions</span><span id="roomLocale">EN</span></div>
+        </div>
+        <div>
+          <p class="eyebrow">COMPETENCIES</p>
+          <div class="chips" id="competencyChips"></div>
+        </div>
+        <div class="audit-note">
+          <strong>Auditable by design</strong>
+          <p>Follow-ups retain their parent turn. Export the trace at any point for VoxRubric analysis.</p>
+          <button class="secondary" id="exportBtn" type="button">Export trace</button>
+        </div>
+      </aside>
+
+      <section class="conversation">
+        <div class="conversation-head">
+          <div><p class="eyebrow">INTERVIEW ROOM</p><h2>Conversation</h2></div>
+          <button class="ghost" id="restartBtn" type="button">New session</button>
+        </div>
+        <div class="messages" id="messages" aria-live="polite"></div>
+        <div class="typing hidden" id="typing"><span></span><span></span><span></span><em>Nora is thinking</em></div>
+        <form class="composer" id="answerForm">
+          <textarea id="answerBox" rows="3" placeholder="Type your answer…  Ctrl/⌘ + Enter to send" required></textarea>
+          <button class="send" type="submit" aria-label="Send answer">↑</button>
+        </form>
+      </section>
+    </section>
+  </main>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
