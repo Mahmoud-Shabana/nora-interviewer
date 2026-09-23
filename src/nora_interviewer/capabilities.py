@@ -25,6 +25,9 @@ class SystemCapabilities(StrictModel):
     recruiter_review_queue: bool = True
     recruiter_review_bundle: bool = True
     recruiter_review_console: bool = True
+    session_etags: bool = True
+    session_cancellation: bool = True
+    evidence_judge_ensemble: bool = False
     voxrubric_export: bool = True
 
 
@@ -47,6 +50,9 @@ def describe_capabilities(
             judge.judge_id != "disabled"
         ),
         evidence_judge_backend=judge_backend,
+        evidence_judge_ensemble=(
+            judge_backend == "EvidenceJudgeEnsemble"
+        ),
         sandbox_mode=os.getenv(
             "NORA_SANDBOX_MODE",
             "disabled",
