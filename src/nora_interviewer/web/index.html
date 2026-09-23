@@ -60,6 +60,24 @@
 Production debugging
 System design
 Technical communication</textarea></label>
+        <div class="tool-policy-picker">
+          <div class="picker-head">
+            <strong>Practical evidence tools</strong>
+            <small>Only checked templates may be requested by the interview agent.</small>
+          </div>
+          <label><input type="checkbox" data-tool-template="python-dedupe-events-v1" checked> Python coding challenge</label>
+          <label><input type="checkbox" data-tool-template="system-design-burst-api-v1" checked> System-design case</label>
+          <label><input type="checkbox" data-tool-template="whiteboard-service-map-v1"> Architecture whiteboard</label>
+          <label><input type="checkbox" data-tool-template="document-incident-review-v1"> Incident document review</label>
+          <label>Maximum practical tasks
+            <select id="maxTools">
+              <option value="0">0 — conversation only</option>
+              <option value="1">1</option>
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+            </select>
+          </label>
+        </div>
         <div class="consent">
           <label><input type="checkbox" id="consentAI" checked> I consent to an AI-led interview.</label>
           <label><input type="checkbox" id="consentTranscript" checked> I consent to transcript processing for this demo.</label>
