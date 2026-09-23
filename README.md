@@ -691,7 +691,19 @@ For local integration tests:
 export NORA_AUTH_MODE=dev-header
 ```
 
-This enables development-only `X-Nora-*` principal headers. It is not production authentication.
+This enables development-only `X-Nora-*` principal headers.
+
+For production-oriented signed identity tokens:
+
+```bash
+export NORA_AUTH_MODE=jwt-jwks
+export NORA_AUTH_JWKS_URL=https://identity.example/.well-known/jwks.json
+export NORA_AUTH_ISSUER=https://identity.example/
+export NORA_AUTH_AUDIENCE=https://api.nora.example
+export NORA_AUTH_ALGORITHMS=RS256
+```
+
+JWT/JWKS mode validates signature, issuer, audience and expiry, rejects symmetric algorithms, and maps verified claims into Nora's internal role/ownership model.
 
 See [Authorization Model](docs/AUTHORIZATION.md).
 
@@ -993,6 +1005,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [x] Role/permission authorization policy
 - [x] Candidate session ownership enforcement
 - [x] REST + WebSocket authorization boundary
+- [x] JWT/JWKS signature + issuer + audience authentication
 - [x] Durable local SQLite store
 - [x] Configurable memory/SQLite persistence
 - [x] Session creation/completion timestamps
@@ -1018,7 +1031,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [ ] Production streaming TTS adapter
 - [ ] VAD and audio chunk transport
 - [ ] Reconnect / backpressure handling
-- [ ] Production OIDC/JWT principal resolver
+- [ ] Organization-specific OIDC login/session integration
 - [ ] PostgreSQL multi-instance persistence
 - [ ] encrypted object storage
 - [ ] retention controls
