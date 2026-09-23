@@ -42,7 +42,11 @@ from .models import (
     VoxRubricTrace,
 )
 from .replay import ReplayState
-from .review import RecruiterSessionReport, ReviewQueueItem
+from .review import (
+    RecruiterSessionReport,
+    ReviewDashboardSummary,
+    ReviewQueueItem,
+)
 from .review_bundle import ReviewBundle, build_review_bundle
 from .review_service import ReviewService
 from .retention import RetentionManager, RetentionReport, RetentionRequest
@@ -156,6 +160,20 @@ async def run_retention(
         Permission.RUN_RETENTION,
     )
     return await retention.run(request)
+
+
+@app.get(
+    "/v1/review/summary",
+    response_model=ReviewDashboardSummary,
+)
+async def review_summary(
+    principal: Principal = Depends(current_principal),
+) -> ReviewDashboardSummary:
+    require_global_permission(
+        principal,
+        Permission.READ_REVIEW_QUEUE,
+    )
+    return await review_service.summary()
 
 
 @app.get(
