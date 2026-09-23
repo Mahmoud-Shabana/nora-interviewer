@@ -13,6 +13,7 @@ from .providers.completion import OpenAICompatibleChatProvider
 from .providers.fallback import FallbackBrain
 from .providers.llm_brain import LLMInterviewBrain
 from .providers.rule_based import RuleBasedBrain
+from .providers.streaming_speech import DisabledStreamingSpeechProvider
 from .postgres_store import PostgresStore
 from .sqlite_store import SqliteStore
 from .storage import InMemoryStore
@@ -261,6 +262,28 @@ def build_principal_resolver():
 
     raise RuntimeError(
         f"Unsupported NORA_AUTH_MODE: {mode}"
+    )
+
+
+def build_streaming_speech_provider():
+    """Build the realtime streaming STT provider.
+
+    The transport protocol can be enabled independently from a concrete
+    transcription vendor. Until a provider adapter is configured, attempts to
+    open an audio stream fail explicitly instead of pretending browser speech
+    APIs are a production streaming backend.
+    """
+
+    mode = os.getenv(
+        "NORA_STREAMING_STT_MODE",
+        "disabled",
+    ).strip().lower()
+
+    if mode == "disabled":
+        return DisabledStreamingSpeechProvider()
+
+    raise RuntimeError(
+        f"Unsupported NORA_STREAMING_STT_MODE: {mode}"
     )
 
 
