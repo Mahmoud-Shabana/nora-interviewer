@@ -9,6 +9,7 @@ from typing import AsyncIterator, Protocol
 from pydantic import Field, model_validator
 
 from .models import StrictModel
+from .vad import VadObservation
 
 
 class AudioEncoding(str, Enum):
@@ -98,6 +99,7 @@ class AudioChunkResult(StrictModel):
     next_sequence: int = Field(ge=0)
     generation: int = Field(ge=0)
     buffered_bytes: int = Field(ge=0)
+    vad: VadObservation | None = None
 
 
 class AudioStreamOpenResult(StrictModel):
