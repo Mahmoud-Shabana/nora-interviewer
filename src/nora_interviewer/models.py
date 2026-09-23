@@ -127,6 +127,17 @@ class Competency(StrictModel):
     anchor_question: str | None = Field(default=None, min_length=4)
 
 
+class RubricProvenance(StrictModel):
+    draft_id: str = Field(min_length=1)
+    drafter_id: str = Field(min_length=1, max_length=500)
+    approved_by: str = Field(min_length=1, max_length=256)
+    approved_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    review_note: str | None = Field(default=None, max_length=5000)
+    edit_summary: dict[str, Any] = Field(default_factory=dict)
+
+
 class JobSpec(StrictModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     title: str = Field(min_length=2)
@@ -136,6 +147,7 @@ class JobSpec(StrictModel):
     anchor_ratio: float = Field(default=0.4, ge=0.0, le=1.0)
     tool_templates: list[JobToolTemplate] = Field(default_factory=list)
     max_tools: int = Field(default=2, ge=0, le=10)
+    rubric_provenance: RubricProvenance | None = None
 
     @model_validator(mode="after")
     def validate_job_contract(self) -> "JobSpec":
