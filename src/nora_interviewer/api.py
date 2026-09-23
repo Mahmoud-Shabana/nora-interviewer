@@ -95,6 +95,7 @@ from .voice_output import (
     TtsStreamError,
     TtsStreamNotFoundError,
     TtsStreamOpenRequest,
+    VoiceTransportCapabilities,
 )
 from .voice_output_bridge import VoiceOutputBridge
 from .voice_stream_bridge import (
@@ -856,6 +857,51 @@ async def export_voxrubric(
         Permission.EXPORT_TRACE,
     )
     return await service.export_voxrubric(session_id)
+
+
+@app.get(
+    "/v1/sessions/{session_id}/voice/capabilities",
+    response_model=VoiceTransportCapabilities,
+)
+async def voice_transport_capabilities(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> VoiceTransportCapabilities:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.USE_VOICE,
+    )
+    stt_enabled = (
+        getattr(
+            streaming_speech_provider,
+            "provider_id",
+            "disabled",
+        )
+        != "disabled"
+    )
+    tts_enabled = (
+        getattr(
+            streaming_tts_provider,
+            "provider_id",
+            "disabled",
+        )
+        != "disabled"
+    )
+    return VoiceTransportCapabilities(
+        streaming_stt_enabled=stt_enabled,
+        streaming_tts_enabled=tts_enabled,
+        stt_protocol=(
+            "nora.stt.v1"
+            if stt_enabled
+            else None
+        ),
+        tts_protocol=(
+            "nora.tts.v1"
+            if tts_enabled
+            else None
+        ),
+    )
 
 
 @app.get(
