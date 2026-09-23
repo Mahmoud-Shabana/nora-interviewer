@@ -33,10 +33,18 @@ from .models import (
 from .replay import ReplayState
 from .service import InterviewService
 from .storage import InMemoryStore
+from .voice import (
+    RealtimeVoiceCoordinator,
+    TranscriptEvent,
+    TtsLifecycleEvent,
+    VoiceSessionState,
+    VoiceTurnResult,
+)
 from .web import WEB_DIR, render_interview_room
 
 store = InMemoryStore()
 service = InterviewService(store=store, brain=build_brain())
+voice = RealtimeVoiceCoordinator(service=service, store=store)
 app = FastAPI(
     title="Nora Interviewer",
     version="0.4.0-dev",
@@ -214,6 +222,80 @@ async def export_voxrubric(session_id: str) -> VoxRubricTrace:
     return await service.export_voxrubric(session_id)
 
 
+@app.get(
+    "/v1/sessions/{session_id}/voice",
+    response_model=VoiceSessionState,
+)
+async def voice_state(session_id: str) -> VoiceSessionState:
+    session = await store.get_session(session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+    return voice.state(session_id)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/voice/speech-started",
+    response_model=VoiceSessionState,
+)
+async def voice_speech_started(session_id: str) -> VoiceSessionState:
+    return await voice.speech_started(session_id)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/voice/transcript-partial",
+    response_model=VoiceSessionState,
+)
+async def voice_transcript_partial(
+    session_id: str,
+    event: TranscriptEvent,
+) -> VoiceSessionState:
+    return await voice.transcript_partial(session_id, event)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/voice/transcript-final",
+    response_model=VoiceTurnResult,
+)
+async def voice_transcript_final(
+    session_id: str,
+    event: TranscriptEvent,
+) -> VoiceTurnResult:
+    return await voice.transcript_final(session_id, event)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/voice/tts-started",
+    response_model=VoiceSessionState,
+)
+async def voice_tts_started(
+    session_id: str,
+    event: TtsLifecycleEvent,
+) -> VoiceSessionState:
+    return await voice.tts_started(session_id, event)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/voice/tts-completed",
+    response_model=VoiceSessionState,
+)
+async def voice_tts_completed(
+    session_id: str,
+    event: TtsLifecycleEvent,
+) -> VoiceSessionState:
+    return await voice.tts_completed(session_id, event)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/voice/tts-cancelled",
+    response_model=VoiceSessionState,
+)
+async def voice_tts_cancelled(
+    session_id: str,
+    event: TtsLifecycleEvent,
+) -> VoiceSessionState:
+    return await voice.tts_cancelled(session_id, event)
+
+
 @app.websocket("/v1/ws/interviews/{session_id}")
 async def interview_socket(websocket: WebSocket, session_id: str) -> None:
     await websocket.accept()
@@ -251,12 +333,78 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
                     )
                 continue
 
+            if event_type == "voice_speech_started":
+                state = await voice.speech_started(session_id)
+                await websocket.send_json(
+                    {"type": "voice_state", "data": state.model_dump(mode="json")}
+                )
+                continue
+
+            if event_type == "voice_transcript_partial":
+                transcript_event = TranscriptEvent.model_validate(event.get("data", {}))
+                state = await voice.transcript_partial(session_id, transcript_event)
+                await websocket.send_json(
+                    {"type": "voice_state", "data": state.model_dump(mode="json")}
+                )
+                continue
+
+            if event_type == "voice_transcript_final":
+                transcript_event = TranscriptEvent.model_validate(event.get("data", {}))
+                await websocket.send_json({"type": "candidate_ack"})
+                voice_result = await voice.transcript_final(
+                    session_id,
+                    transcript_event,
+                )
+                await websocket.send_json(
+                    {
+                        "type": "voice_state",
+                        "data": voice_result.state.model_dump(mode="json"),
+                    }
+                )
+                if voice_result.interviewer_turn:
+                    await websocket.send_json(
+                        {
+                            "type": "interviewer_turn",
+                            "data": voice_result.interviewer_turn.model_dump(mode="json"),
+                        }
+                    )
+                if voice_result.tool_invocation:
+                    await websocket.send_json(
+                        {
+                            "type": "tool_opened",
+                            "data": voice_result.tool_invocation.model_dump(mode="json"),
+                        }
+                    )
+                if voice_result.completed:
+                    await websocket.send_json(
+                        {"type": "interview_completed", "session_id": session_id}
+                    )
+                    break
+                continue
+
+            if event_type in {
+                "voice_tts_started",
+                "voice_tts_completed",
+                "voice_tts_cancelled",
+            }:
+                lifecycle = TtsLifecycleEvent.model_validate(event.get("data", {}))
+                if event_type == "voice_tts_started":
+                    state = await voice.tts_started(session_id, lifecycle)
+                elif event_type == "voice_tts_completed":
+                    state = await voice.tts_completed(session_id, lifecycle)
+                else:
+                    state = await voice.tts_cancelled(session_id, lifecycle)
+                await websocket.send_json(
+                    {"type": "voice_state", "data": state.model_dump(mode="json")}
+                )
+                continue
+
             if event_type != "candidate_text" or not str(event.get("text", "")).strip():
                 await websocket.send_json(
                     {
                         "type": "error",
                         "error": (
-                            "Expected candidate_text or candidate_control event."
+                            "Expected candidate_text, candidate_control, or voice event."
                         ),
                     }
                 )
