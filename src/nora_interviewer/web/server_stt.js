@@ -795,6 +795,27 @@ class NoraServerSttClient {
         }
       }
       this.pendingAcks = this.inFlight.size;
+
+      const vad = packet.data?.vad || null;
+      if (
+        vad?.auto_commit_recommended
+        && this.active
+        && !this.committing
+      ) {
+        this.active = false;
+        this.committing = true;
+        this.commitRequested = true;
+        this.frameQueue = [];
+        this.pendingPcm = new Int16Array(0);
+        this.stopCapture().catch(() => {});
+        this.onState({
+          phase: "processing",
+          transport: "server-stt",
+          endpoint: vad.state || "vad",
+        });
+        return;
+      }
+
       this.flushFrames();
       return;
     }
