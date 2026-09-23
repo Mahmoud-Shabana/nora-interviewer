@@ -171,6 +171,7 @@ async function createInterview(event) {
         locale: $("locale").value,
         consent_to_ai_interview: $("consentAI").checked,
         consent_to_transcript: $("consentTranscript").checked,
+        integrity_level: $("integrityLevel").value,
       }),
     });
 
