@@ -50,6 +50,13 @@ class IntegrityReviewStatus(str, Enum):
     REVIEWED = "reviewed"
 
 
+class ReviewAssignmentStatus(str, Enum):
+    OPEN = "open"
+    IN_REVIEW = "in_review"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
 class IntegrityLevel(str, Enum):
     NONE = "none"
     IDENTITY = "identity"
@@ -98,6 +105,10 @@ class EventType(str, Enum):
     EVIDENCE_SUPERSEDED = "evidence_superseded"
     INTEGRITY_SIGNAL = "integrity_signal"
     INTEGRITY_REVIEWED = "integrity_reviewed"
+    REVIEW_ASSIGNED = "review_assigned"
+    REVIEW_STARTED = "review_started"
+    REVIEW_COMPLETED = "review_completed"
+    REVIEW_ASSIGNMENT_CANCELLED = "review_assignment_cancelled"
     TOOL_OPENED = "tool_opened"
     TOOL_SUBMITTED = "tool_submitted"
     TOOL_EVALUATED = "tool_evaluated"
@@ -305,6 +316,22 @@ class IntegrityReviewRequest(StrictModel):
     note: str = Field(min_length=2, max_length=5000)
 
 
+class ReviewAssignment(StrictModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    reviewer_id: str = Field(min_length=1, max_length=256)
+    assigned_by: str = Field(min_length=1, max_length=256)
+    status: ReviewAssignmentStatus = ReviewAssignmentStatus.OPEN
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    assignment_note: str | None = Field(default=None, max_length=5000)
+    completion_note: str | None = Field(default=None, max_length=5000)
+    cancellation_reason: str | None = Field(default=None, max_length=5000)
+
+
 class ToolInvocation(StrictModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     kind: ToolKind
@@ -390,6 +417,7 @@ class InterviewSession(StrictModel):
     transcript_revisions: list[TranscriptRevision] = Field(default_factory=list)
     appeals: list[CandidateAppeal] = Field(default_factory=list)
     integrity_signals: list[IntegritySignal] = Field(default_factory=list)
+    review_assignments: list[ReviewAssignment] = Field(default_factory=list)
     tools: list[ToolInvocation] = Field(default_factory=list)
     tool_submissions: list[ToolSubmission] = Field(default_factory=list)
     tool_evaluations: list[ToolEvaluation] = Field(default_factory=list)
