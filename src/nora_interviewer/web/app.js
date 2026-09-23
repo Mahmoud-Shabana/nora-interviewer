@@ -18,6 +18,9 @@ const state = {
   listening: false,
   paused: false,
   currentTool: null,
+  activeTtsTurnId: null,
+  bargeInPending: false,
+  recognitionFinalSent: false,
 };
 
 function slugify(text, i) {
@@ -57,12 +60,53 @@ function browserSpeechRecognition() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
 
-function speak(text) {
-  if (!state.voiceEnabled || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
+function sendVoiceEvent(type, data = {}) {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+  state.ws.send(JSON.stringify({type, data}));
+}
+
+function speak(turn) {
+  if (!state.voiceEnabled || !("speechSynthesis" in window) || !turn?.text) return;
+
+  if (state.activeTtsTurnId) {
+    sendVoiceEvent("voice_tts_cancelled", {turn_id: state.activeTtsTurnId});
+    window.speechSynthesis.cancel();
+    state.activeTtsTurnId = null;
+  }
+
+  const utterance = new SpeechSynthesisUtterance(turn.text);
   utterance.lang = state.session?.locale?.startsWith("ar") ? "ar-SA" : "en-US";
   utterance.rate = 0.98;
+
+  utterance.onstart = () => {
+    state.activeTtsTurnId = turn.id;
+    sendVoiceEvent("voice_tts_started", {turn_id: turn.id});
+  };
+
+  utterance.onend = () => {
+    if (state.bargeInPending) {
+      state.bargeInPending = false;
+      state.activeTtsTurnId = null;
+      return;
+    }
+    if (state.activeTtsTurnId === turn.id) {
+      sendVoiceEvent("voice_tts_completed", {turn_id: turn.id});
+      state.activeTtsTurnId = null;
+    }
+  };
+
+  utterance.onerror = () => {
+    if (state.bargeInPending) {
+      state.bargeInPending = false;
+      state.activeTtsTurnId = null;
+      return;
+    }
+    if (state.activeTtsTurnId === turn.id) {
+      sendVoiceEvent("voice_tts_cancelled", {turn_id: turn.id});
+      state.activeTtsTurnId = null;
+    }
+  };
+
   window.speechSynthesis.speak(utterance);
 }
 
@@ -78,7 +122,14 @@ function ensureRecognition() {
 
   recognition.onstart = () => {
     state.listening = true;
+    state.recognitionFinalSent = false;
     $("micBtn").classList.add("listening");
+
+    if (state.activeTtsTurnId && "speechSynthesis" in window) {
+      state.bargeInPending = true;
+      window.speechSynthesis.cancel();
+    }
+    sendVoiceEvent("voice_speech_started");
     setConnection("Listening…");
   };
   recognition.onend = () => {
@@ -92,11 +143,44 @@ function ensureRecognition() {
     setConnection(`Voice input: ${event.error || "error"}`, true);
   };
   recognition.onresult = (event) => {
-    let transcript = "";
+    let interim = "";
+    let finalText = "";
+    let finalConfidence = null;
+
     for (let i = event.resultIndex; i < event.results.length; i += 1) {
-      transcript += event.results[i][0].transcript;
+      const result = event.results[i];
+      const text = result[0].transcript;
+      if (result.isFinal) {
+        finalText += text;
+        if (Number.isFinite(result[0].confidence)) {
+          finalConfidence = result[0].confidence;
+        }
+      } else {
+        interim += text;
+      }
     }
-    $("answerBox").value = transcript.trim();
+
+    const visible = (finalText || interim).trim();
+    if (visible) $("answerBox").value = visible;
+
+    if (interim.trim()) {
+      sendVoiceEvent("voice_transcript_partial", {
+        text: interim.trim(),
+        confidence: null,
+      });
+    }
+
+    if (finalText.trim() && !state.recognitionFinalSent) {
+      state.recognitionFinalSent = true;
+      const finalAnswer = finalText.trim();
+      addMessage("candidate", finalAnswer, "Candidate · VOICE");
+      $("answerBox").value = "";
+      setThinking(true);
+      sendVoiceEvent("voice_transcript_final", {
+        text: finalAnswer,
+        confidence: finalConfidence,
+      });
+    }
   };
 
   state.recognition = recognition;
@@ -121,7 +205,13 @@ function toggleVoice() {
   state.voiceEnabled = !state.voiceEnabled;
   $("voiceBtn").classList.toggle("active", state.voiceEnabled);
   $("voiceBtn").textContent = state.voiceEnabled ? "Voice enabled" : "Enable voice";
-  if (!state.voiceEnabled && "speechSynthesis" in window) window.speechSynthesis.cancel();
+  if (!state.voiceEnabled && "speechSynthesis" in window) {
+    if (state.activeTtsTurnId) {
+      sendVoiceEvent("voice_tts_cancelled", {turn_id: state.activeTtsTurnId});
+      state.activeTtsTurnId = null;
+    }
+    window.speechSynthesis.cancel();
+  }
 }
 
 function updateCoverage(tags = []) {
@@ -202,7 +292,7 @@ async function submitCurrentTool() {
         : "NORA";
       const tags = turn.competency_tags?.join(" · ");
       addMessage("nora", turn.text, [lane, tags].filter(Boolean).join(" · "));
-      speak(turn.text);
+      speak(turn);
       updateProgress(turn);
     }
 
@@ -337,6 +427,18 @@ function connectSocket() {
       }
       return;
     }
+    if (packet.type === "voice_state") {
+      const voice = packet.data || {};
+      const latency = voice.last_final_to_response_ms;
+      if (voice.phase === "speaking") {
+        setConnection(latency == null ? "Nora speaking" : `Nora speaking · ${latency} ms response`);
+      } else if (voice.phase === "listening") {
+        setConnection("Listening…");
+      } else if (voice.phase === "processing") {
+        setConnection("Processing voice…");
+      }
+      return;
+    }
     if (packet.type === "tool_opened") {
       openToolWorkspace(packet.data);
       setConnection("Practical task opened");
@@ -348,7 +450,7 @@ function connectSocket() {
       const lane = turn.metadata?.question_lane ? turn.metadata.question_lane.toUpperCase() : "NORA";
       const tags = turn.competency_tags?.join(" · ");
       addMessage("nora", turn.text, [lane, tags].filter(Boolean).join(" · "));
-      speak(turn.text);
+      speak(turn);
       updateProgress(turn);
       $("answerBox").focus();
       return;
