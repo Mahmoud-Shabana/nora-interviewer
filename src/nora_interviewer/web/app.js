@@ -115,7 +115,8 @@ function browserSpeak(turn) {
 
 function ensureServerTtsPlayer() {
   if (
-    !state.voiceTransport?.streaming_tts_enabled
+    !(state.voiceTransport?.streaming_tts_available
+      ?? state.voiceTransport?.streaming_tts_enabled)
     || !window.NoraServerTtsPlayer
     || !state.session
   ) {
@@ -196,11 +197,26 @@ async function loadVoiceTransportCapabilities() {
     };
   }
 
-  if (state.voiceTransport.streaming_tts_enabled) {
+  const ttsConfigured = Boolean(
+    state.voiceTransport.streaming_tts_enabled
+  );
+  const ttsAvailable = (
+    state.voiceTransport.streaming_tts_available
+    ?? ttsConfigured
+  );
+
+  if (ttsConfigured && ttsAvailable) {
     $("voiceTitle").textContent = "Server voice";
     $("voiceDescription").textContent = (
       "Nora can stream synthesized audio from the server. "
       + "The microphone still uses the browser demo input when supported."
+    );
+  } else if (ttsConfigured) {
+    $("voiceTitle").textContent = "Browser fallback";
+    $("voiceDescription").textContent = (
+      "Server TTS is temporarily unavailable "
+      + `(${state.voiceTransport.tts_health || "degraded"}). `
+      + "Browser speech synthesis remains available."
     );
   } else {
     $("voiceTitle").textContent = "Browser voice";
@@ -332,7 +348,8 @@ async function toggleVoice() {
   if ("speechSynthesis" in window) {
     if (
       state.activeTtsTurnId
-      && !state.voiceTransport?.streaming_tts_enabled
+      && !(state.voiceTransport?.streaming_tts_available
+        ?? state.voiceTransport?.streaming_tts_enabled)
     ) {
       sendVoiceEvent(
         "voice_tts_cancelled",
