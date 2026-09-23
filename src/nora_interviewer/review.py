@@ -96,6 +96,20 @@ class ReviewDashboardSummary(StrictModel):
     completed_sessions: int = Field(ge=0)
 
 
+class EvidenceReevaluationQueueItem(StrictModel):
+    session_id: str
+    job_id: str
+    candidate_ref: str
+    role: str
+    answer_turn_id: str
+    latest_run_id: str
+    judge_id: str
+    stale: bool
+    failed: bool
+    transcript_revision_count: int = Field(ge=0)
+    current_transcript_revision_count: int = Field(ge=0)
+
+
 class ReviewQueueItem(StrictModel):
     session_id: str
     job_id: str
