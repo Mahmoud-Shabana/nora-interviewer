@@ -43,6 +43,7 @@ def test_capability_description_contains_backends_not_secrets(monkeypatch):
     assert capabilities.recruiter_review_console is True
     assert capabilities.voice_provider_health is True
     assert capabilities.operational_metrics is True
+    assert capabilities.correlation_ids is True
     assert capabilities.streaming_stt_enabled is False
     assert (
         capabilities.streaming_stt_backend
