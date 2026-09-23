@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -132,10 +134,19 @@ def enforce_session_precondition(
         )
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    try:
+        yield
+    finally:
+        await store.close()
+
+
 app = FastAPI(
     title="Nora Interviewer",
     version=API_VERSION,
     description="Provider-neutral orchestration API for auditable AI interviews.",
+    lifespan=lifespan,
 )
 app.mount("/assets", StaticFiles(directory=WEB_DIR), name="assets")
 
