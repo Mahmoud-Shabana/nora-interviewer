@@ -55,7 +55,7 @@ from .planner import DualLanePlanner
 from .providers.base import InterviewBrain
 from .replay import ReplayState, replay_events
 from .sandbox import default_sandbox_runner
-from .storage import Store
+from .storage import Store, StoreConflictError
 from .tool_templates import ToolTemplateRegistry, default_tool_template_registry
 from .tools import ToolRegistry, default_tool_registry
 
@@ -117,7 +117,7 @@ class InterviewService:
                 "integrity_level": session.integrity_level.value,
             },
         )
-        await self.store.put_session(session)
+        await self._persist_session(session)
         return session
 
     async def start(self, session_id: str) -> SessionStep:
@@ -148,7 +148,7 @@ class InterviewService:
             opened_from_turn_id=turn.id,
         )
         session.status = SessionStatus.RUNNING
-        await self.store.put_session(session)
+        await self._persist_session(session)
         return SessionStep(
             session_id=session.id,
             status=session.status,
@@ -244,7 +244,7 @@ class InterviewService:
                 session.completed_at = datetime.now(timezone.utc)
             append_event(session, EventType.SESSION_COMPLETED)
 
-        await self.store.put_session(session)
+        await self._persist_session(session)
         return SessionStep(
             session_id=session.id,
             status=session.status,
@@ -678,7 +678,7 @@ class InterviewService:
                 session.completed_at = datetime.now(timezone.utc)
             append_event(session, EventType.SESSION_COMPLETED)
 
-        await self.store.put_session(session)
+        await self._persist_session(session)
         return ToolStep(
             tool_id=tool_id,
             evaluation=evaluation,
@@ -754,7 +754,7 @@ class InterviewService:
             EventType.APPEAL_SUBMITTED,
             payload={"appeal_id": appeal.id, "turn_ids": appeal.turn_ids},
         )
-        await self.store.put_session(session)
+        await self._persist_session(session)
         return appeal
 
     async def review_appeal(
@@ -789,7 +789,7 @@ class InterviewService:
                 "note": request.note,
             },
         )
-        await self.store.put_session(session)
+        await self._persist_session(session)
         return appeal
 
     async def submit_integrity_signal(
@@ -816,7 +816,7 @@ class InterviewService:
                 "requires_human_review": True,
             },
         )
-        await self.store.put_session(session)
+        await self._persist_session(session)
         return signal
 
     async def review_integrity_signal(
@@ -852,7 +852,7 @@ class InterviewService:
                 "requires_human_review": True,
             },
         )
-        await self.store.put_session(session)
+        await self._persist_session(session)
         return signal
 
     async def observe_evidence(
@@ -878,7 +878,7 @@ class InterviewService:
                 "source": item.source,
             },
         )
-        await self.store.put_session(session)
+        await self._persist_session(session)
         return session.evidence_graph[observation.competency_id]
 
     async def candidate_feedback(self, session_id: str) -> CandidateFeedbackReport:
@@ -1021,6 +1021,21 @@ class InterviewService:
                 "event_count": len(session.events),
             },
         )
+
+    async def _persist_session(
+        self,
+        session: InterviewSession,
+    ) -> None:
+        try:
+            await self.store.put_session(session)
+        except StoreConflictError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Interview state changed concurrently. "
+                    "Reload the session and retry the operation."
+                ),
+            ) from exc
 
     async def _get(self, session_id: str) -> tuple[InterviewSession, JobSpec]:
         session = await self.store.get_session(session_id)
