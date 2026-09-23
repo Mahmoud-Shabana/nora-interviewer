@@ -23,11 +23,12 @@
       <div class="hero-copy">
         <p class="eyebrow">AUDITABLE · ADAPTIVE · MULTILINGUAL</p>
         <h1>Run a structured interview without turning hiring into a black box.</h1>
-        <p class="lede">Nora tracks competencies, asks traceable follow-ups, and exports every session into VoxRubric for independent evaluation.</p>
+        <p class="lede">Nora combines standardized anchor questions with adaptive investigation, preserves evidence provenance, and exports every session into VoxRubric for independent evaluation.</p>
         <div class="principles">
+          <span>Dual-lane</span>
           <span>Evidence-linked</span>
+          <span>Candidate-correctable</span>
           <span>Human-reviewed</span>
-          <span>Provider-neutral</span>
           <span>Voice-ready</span>
         </div>
       </div>
@@ -45,6 +46,16 @@
             <option value="ar-SA">العربية + English</option>
           </select>
         </label>
+        <label>Integrity mode
+          <select id="integrityLevel">
+            <option value="none">None — no proctoring</option>
+            <option value="identity">Identity only</option>
+            <option value="passive_signals">Passive signals — review only</option>
+            <option value="secure">Secure assessment mode</option>
+            <option value="proctored">High-stakes proctored mode</option>
+          </select>
+        </label>
+        <p class="fineprint">Integrity signals are review flags, never automatic misconduct decisions.</p>
         <label>Competencies<textarea id="competencies" rows="4">Python engineering
 Production debugging
 System design
@@ -80,7 +91,7 @@ Technical communication</textarea></label>
         </div>
         <div class="audit-note">
           <strong>Auditable by design</strong>
-          <p>Follow-ups retain their parent turn. Export the trace at any point for VoxRubric analysis.</p>
+          <p>Follow-ups retain parent turns. Candidate corrections preserve the original transcript, and appeals stay in the audit log.</p>
           <button class="secondary" id="exportBtn" type="button">Export trace</button>
         </div>
       </aside>
