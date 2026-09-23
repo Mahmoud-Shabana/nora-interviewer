@@ -22,6 +22,7 @@ from .providers.streaming_tts import DisabledStreamingTtsProvider
 from .providers.websocket_speech import JsonWebSocketSpeechProvider
 from .providers.websocket_tts import JsonWebSocketTtsProvider
 from .postgres_store import PostgresStore
+from .provider_health import ProviderHealthRegistry
 from .sqlite_store import SqliteStore
 from .storage import InMemoryStore
 
@@ -481,6 +482,37 @@ def build_streaming_tts_provider():
     raise RuntimeError(
         f"Unsupported NORA_STREAMING_TTS_MODE: {mode}"
     )
+
+
+def build_voice_provider_health_registry() -> ProviderHealthRegistry:
+    try:
+        failure_threshold = int(
+            os.getenv(
+                "NORA_VOICE_PROVIDER_FAILURE_THRESHOLD",
+                "3",
+            )
+        )
+        cooldown_seconds = float(
+            os.getenv(
+                "NORA_VOICE_PROVIDER_COOLDOWN_SECONDS",
+                "20",
+            )
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            "Voice provider failure threshold must be an integer and "
+            "cooldown must be numeric"
+        ) from exc
+
+    try:
+        return ProviderHealthRegistry(
+            failure_threshold=failure_threshold,
+            cooldown_seconds=cooldown_seconds,
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Invalid voice provider health configuration: {exc}"
+        ) from exc
 
 
 def build_store():
