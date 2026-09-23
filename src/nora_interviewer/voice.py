@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 from time import perf_counter
-from typing import Callable
+from typing import Callable, Literal
 
 from fastapi import HTTPException
 from pydantic import Field
@@ -28,6 +28,20 @@ class TranscriptEvent(StrictModel):
 
 class TtsLifecycleEvent(StrictModel):
     turn_id: str = Field(min_length=1)
+
+
+class VoiceTransportSelectionEvent(StrictModel):
+    direction: Literal["stt", "tts"]
+    transport: Literal["server", "browser"]
+    provider_id: str | None = Field(default=None, max_length=200)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class VoiceTransportFallbackEvent(StrictModel):
+    direction: Literal["stt", "tts"]
+    from_transport: Literal["server", "browser"]
+    to_transport: Literal["server", "browser"]
+    reason: str = Field(min_length=1, max_length=1000)
 
 
 class VoiceSessionState(StrictModel):
@@ -377,6 +391,57 @@ class RealtimeVoiceCoordinator:
         await self._persist(session)
         return state.model_copy(deep=True)
 
+
+    async def provider_failed(
+        self,
+        session_id: str,
+        *,
+        direction: Literal["stt", "tts"],
+        provider_id: str,
+        error_type: str,
+        message: str,
+    ) -> None:
+        session = await self._session(session_id)
+        append_event(
+            session,
+            EventType.VOICE_PROVIDER_FAILED,
+            payload={
+                "direction": direction,
+                "provider_id": provider_id,
+                "error_type": error_type,
+                "message": message[:1000],
+            },
+        )
+        await self._persist(session)
+
+    async def transport_selected(
+        self,
+        session_id: str,
+        event: VoiceTransportSelectionEvent,
+    ) -> None:
+        session = await self._session(session_id)
+        append_event(
+            session,
+            EventType.VOICE_TRANSPORT_SELECTED,
+            payload=event.model_dump(
+                mode="json",
+                exclude_none=True,
+            ),
+        )
+        await self._persist(session)
+
+    async def transport_fallback(
+        self,
+        session_id: str,
+        event: VoiceTransportFallbackEvent,
+    ) -> None:
+        session = await self._session(session_id)
+        append_event(
+            session,
+            EventType.VOICE_TRANSPORT_FALLBACK,
+            payload=event.model_dump(mode="json"),
+        )
+        await self._persist(session)
 
     async def close_session(
         self,
