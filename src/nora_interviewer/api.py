@@ -26,6 +26,8 @@ from .models import (
     CompetencyEvidence,
     CreateSession,
     EvidenceObservation,
+    IntegrityReviewRequest,
+    IntegrityReviewSubmission,
     IntegritySignal,
     IntegritySignalRequest,
     InterviewEvent,
@@ -401,6 +403,31 @@ async def submit_integrity_signal(
         Permission.WRITE_INTEGRITY,
     )
     return await service.submit_integrity_signal(session_id, request)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/integrity-signals/{signal_id}/review",
+    response_model=IntegritySignal,
+)
+async def review_integrity_signal(
+    session_id: str,
+    signal_id: str,
+    request: IntegrityReviewSubmission,
+    principal: Principal = Depends(current_principal),
+) -> IntegritySignal:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.REVIEW_INTEGRITY,
+    )
+    return await service.review_integrity_signal(
+        session_id,
+        signal_id,
+        IntegrityReviewRequest(
+            reviewer_id=principal.id,
+            note=request.note,
+        ),
+    )
 
 
 @app.post(
