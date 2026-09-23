@@ -9,6 +9,8 @@ from .feedback import CandidateFeedbackReport
 from .models import (
     CandidateAppeal,
     CandidateAppealRequest,
+    CandidateControlRequest,
+    CandidateControlResult,
     CandidateResponse,
     CompetencyEvidence,
     CreateSession,
@@ -19,6 +21,9 @@ from .models import (
     InterviewSession,
     JobSpec,
     SessionStep,
+    ToolEvaluation,
+    ToolInvocation,
+    ToolSubmissionRequest,
     TranscriptCorrectionRequest,
     TranscriptRevision,
     VoxRubricTrace,
@@ -32,7 +37,7 @@ store = InMemoryStore()
 service = InterviewService(store=store, brain=build_brain())
 app = FastAPI(
     title="Nora Interviewer",
-    version="0.3.0",
+    version="0.4.0-dev",
     description="Provider-neutral orchestration API for auditable AI interviews.",
 )
 app.mount("/assets", StaticFiles(directory=WEB_DIR), name="assets")
@@ -66,6 +71,41 @@ async def start_session(session_id: str) -> SessionStep:
 @app.post("/v1/sessions/{session_id}/responses", response_model=SessionStep)
 async def submit_response(session_id: str, response: CandidateResponse) -> SessionStep:
     return await service.answer(session_id, response.text)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/controls",
+    response_model=CandidateControlResult,
+)
+async def candidate_control(
+    session_id: str,
+    request: CandidateControlRequest,
+) -> CandidateControlResult:
+    return await service.candidate_control(session_id, request)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/tools",
+    response_model=ToolInvocation,
+    status_code=201,
+)
+async def open_tool(
+    session_id: str,
+    invocation: ToolInvocation,
+) -> ToolInvocation:
+    return await service.open_tool(session_id, invocation)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/tools/{tool_id}/submit",
+    response_model=ToolEvaluation,
+)
+async def submit_tool(
+    session_id: str,
+    tool_id: str,
+    request: ToolSubmissionRequest,
+) -> ToolEvaluation:
+    return await service.submit_tool(session_id, tool_id, request)
 
 
 @app.get("/v1/sessions/{session_id}", response_model=InterviewSession)
@@ -158,21 +198,54 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
     try:
         step = await service.start(session_id)
         if step.interviewer_turn:
-            await websocket.send_json({"type": "interviewer_turn", "data": step.interviewer_turn.model_dump(mode="json")})
+            await websocket.send_json(
+                {"type": "interviewer_turn", "data": step.interviewer_turn.model_dump(mode="json")}
+            )
+
         while step.status.value != "completed":
             event = await websocket.receive_json()
-            if event.get("type") == "ping":
+            event_type = event.get("type")
+
+            if event_type == "ping":
                 await websocket.send_json({"type": "pong"})
                 continue
-            if event.get("type") != "candidate_text" or not str(event.get("text", "")).strip():
-                await websocket.send_json({"type": "error", "error": "Expected {type: candidate_text, text: ...}"})
+
+            if event_type == "candidate_control":
+                request = CandidateControlRequest.model_validate(event.get("data", {}))
+                result = await service.candidate_control(session_id, request)
+                await websocket.send_json(
+                    {"type": "candidate_control_ack", "data": result.model_dump(mode="json")}
+                )
+                if result.interviewer_turn:
+                    await websocket.send_json(
+                        {
+                            "type": "interviewer_turn",
+                            "data": result.interviewer_turn.model_dump(mode="json"),
+                        }
+                    )
                 continue
+
+            if event_type != "candidate_text" or not str(event.get("text", "")).strip():
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "error": (
+                            "Expected candidate_text or candidate_control event."
+                        ),
+                    }
+                )
+                continue
+
             await websocket.send_json({"type": "candidate_ack"})
             step = await service.answer(session_id, str(event["text"]).strip())
             if step.interviewer_turn:
-                await websocket.send_json({"type": "interviewer_turn", "data": step.interviewer_turn.model_dump(mode="json")})
+                await websocket.send_json(
+                    {"type": "interviewer_turn", "data": step.interviewer_turn.model_dump(mode="json")}
+                )
             if step.status.value == "completed":
-                await websocket.send_json({"type": "interview_completed", "session_id": session_id})
+                await websocket.send_json(
+                    {"type": "interview_completed", "session_id": session_id}
+                )
                 break
     except WebSocketDisconnect:
         return
