@@ -39,13 +39,15 @@ class StaticToolTemplate:
         competency_tags: list[str],
         opened_from_turn_id: str | None,
     ) -> ToolInvocation:
+        payload = dict(self.payload)
+        payload["template_id"] = self.template_id
         return ToolInvocation(
             kind=self.kind,
             title=self.title,
             instructions=self.instructions,
             competency_tags=competency_tags,
             opened_from_turn_id=opened_from_turn_id,
-            payload=dict(self.payload),
+            payload=payload,
         )
 
 
@@ -70,7 +72,7 @@ class CodingToolTemplate:
         competency_tags: list[str],
         opened_from_turn_id: str | None,
     ) -> ToolInvocation:
-        return self.manager.create(
+        invocation = self.manager.create(
             CodingChallengeRequest(
                 title=self.title,
                 instructions=self.instructions,
@@ -82,6 +84,8 @@ class CodingToolTemplate:
                 timeout_seconds=self.timeout_seconds,
             )
         )
+        invocation.payload["template_id"] = self.template_id
+        return invocation
 
 
 class ToolTemplateRegistry:
