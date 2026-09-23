@@ -41,6 +41,11 @@ def test_capability_description_contains_backends_not_secrets(monkeypatch):
     assert capabilities.recruiter_review_queue is True
     assert capabilities.recruiter_review_bundle is True
     assert capabilities.recruiter_review_console is True
+    assert capabilities.streaming_stt_enabled is False
+    assert (
+        capabilities.streaming_stt_backend
+        == "DisabledStreamingSpeechProvider"
+    )
 
     serialized = capabilities.model_dump_json()
     assert "API_KEY" not in serialized
