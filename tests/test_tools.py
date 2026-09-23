@@ -42,14 +42,17 @@ def test_generic_tool_defaults_to_manual_review_not_fake_score():
                 competency_tags=["analysis"],
             ),
         )
-        evaluation = await service.submit_tool(
+        step = await service.submit_tool(
             session.id,
             invocation.id,
             ToolSubmissionRequest(content={"answer": "Expand only after validating retention."}),
         )
+        evaluation = step.evaluation
         assert evaluation.passed is None
         assert evaluation.score is None
         assert evaluation.evidence["review_required"] is True
+        assert step.interviewer_turn is not None
+        assert step.interviewer_turn.parent_turn_id is not None
 
         current = await store.get_session(session.id)
         assert current.tools[0].status.value == "evaluated"
