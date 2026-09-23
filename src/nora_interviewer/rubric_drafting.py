@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from typing import Protocol
 from uuid import uuid4
 
 from pydantic import Field, model_validator
 
-from .models import Competency, JobSpec, StrictModel
+from .models import (
+    Competency,
+    JobSpec,
+    JobToolTemplate,
+    RubricProvenance,
+    StrictModel,
+)
 from .providers.completion import CompletionProvider
 
 
@@ -44,8 +51,22 @@ class RubricDraftCompetency(StrictModel):
     )
 
 
+class RubricApprovalRequest(StrictModel):
+    job_id: str | None = Field(default=None, min_length=1)
+    title: str = Field(min_length=2, max_length=200)
+    description: str = Field(min_length=20, max_length=30_000)
+    competencies: list[Competency] = Field(min_length=3, max_length=12)
+    max_questions: int = Field(default=10, ge=3, le=30)
+    anchor_ratio: float = Field(default=0.4, ge=0.2, le=0.8)
+    tool_templates: list[JobToolTemplate] = Field(default_factory=list)
+    max_tools: int = Field(default=2, ge=0, le=10)
+    review_note: str | None = Field(default=None, max_length=5000)
+
 class RubricDraft(StrictModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
     title: str
     job_description: str
     locale: str
@@ -58,21 +79,34 @@ class RubricDraft(StrictModel):
     drafter_id: str = Field(min_length=1, max_length=500)
     warnings: list[str] = Field(default_factory=list)
     activation_status: str = "draft_only"
+    approved_job_id: str | None = None
+    approved_by: str | None = Field(default=None, max_length=256)
+    approved_at: datetime | None = None
 
     @model_validator(mode="after")
     def validate_draft(self) -> "RubricDraft":
         ids = [item.id for item in self.competencies]
         if len(ids) != len(set(ids)):
+            raise ValueError("draft competency ids must be unique")
+
+        if self.activation_status not in {"draft_only", "approved"}:
+            raise ValueError("unsupported rubric draft activation_status")
+
+        approval_fields = (
+            self.approved_job_id,
+            self.approved_by,
+            self.approved_at,
+        )
+        if self.activation_status == "draft_only":
+            if any(value is not None for value in approval_fields):
+                raise ValueError(
+                    "draft_only rubric cannot contain approval metadata"
+                )
+        elif any(value is None for value in approval_fields):
             raise ValueError(
-                "draft competency ids must be unique"
-            )
-        if self.activation_status != "draft_only":
-            raise ValueError(
-                "AI-authored rubrics must remain draft_only "
-                "until explicitly reviewed by a recruiter"
+                "approved rubric requires job, reviewer, and timestamp"
             )
         return self
-
     def to_job_spec(
         self,
         *,
@@ -95,6 +129,75 @@ class RubricDraft(StrictModel):
             anchor_ratio=self.anchor_ratio,
         )
 
+
+def _edit_summary(
+    draft: RubricDraft,
+    request: RubricApprovalRequest,
+) -> dict:
+    original = {item.id: item for item in draft.competencies}
+    approved = {item.id: item for item in request.competencies}
+    added = sorted(set(approved) - set(original))
+    removed = sorted(set(original) - set(approved))
+    modified: list[str] = []
+    for competency_id in sorted(set(original) & set(approved)):
+        before = original[competency_id]
+        after = approved[competency_id]
+        if (
+            before.description != after.description
+            or before.weight != after.weight
+            or before.anchor_question != after.anchor_question
+        ):
+            modified.append(competency_id)
+
+    return {
+        "title_changed": request.title != draft.title,
+        "description_changed": request.description != draft.job_description,
+        "max_questions_changed": request.max_questions != draft.max_questions,
+        "anchor_ratio_changed": request.anchor_ratio != draft.anchor_ratio,
+        "competencies_added": added,
+        "competencies_removed": removed,
+        "competencies_modified": modified,
+    }
+
+
+def approve_rubric_draft(
+    draft: RubricDraft,
+    request: RubricApprovalRequest,
+    *,
+    approved_by: str,
+) -> tuple[RubricDraft, JobSpec]:
+    if draft.activation_status != "draft_only":
+        raise RubricDraftError("rubric draft is already approved")
+
+    job_id = request.job_id or str(uuid4())
+    approved_at = datetime.now(timezone.utc)
+    summary = _edit_summary(draft, request)
+    job = JobSpec(
+        id=job_id,
+        title=request.title,
+        description=request.description,
+        competencies=request.competencies,
+        max_questions=request.max_questions,
+        anchor_ratio=request.anchor_ratio,
+        tool_templates=request.tool_templates,
+        max_tools=request.max_tools,
+        rubric_provenance=RubricProvenance(
+            draft_id=draft.id,
+            drafter_id=draft.drafter_id,
+            approved_by=approved_by,
+            approved_at=approved_at,
+            review_note=request.review_note,
+            edit_summary=summary,
+        ),
+    )
+    approved_draft = RubricDraft.model_validate({
+        **draft.model_dump(mode="python"),
+        "activation_status": "approved",
+        "approved_job_id": job.id,
+        "approved_by": approved_by,
+        "approved_at": approved_at,
+    })
+    return approved_draft, job
 
 class RubricDrafter(Protocol):
     @property
