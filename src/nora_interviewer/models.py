@@ -278,6 +278,21 @@ class InterviewEvent(StrictModel):
     type: EventType
     turn_id: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    hash_version: int | None = Field(
+        default=None,
+        ge=1,
+    )
+    prev_hash: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    event_hash: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+    )
 
 
 class InterviewSession(StrictModel):
