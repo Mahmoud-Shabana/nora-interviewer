@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from .authorization import AccessPolicy, Permission, Principal
 from .coding import CodingChallengeRequest
-from .config import build_brain, build_evidence_judge
+from .config import (
+    build_brain,
+    build_evidence_judge,
+    build_principal_resolver,
+)
 from .counterfactual import CounterfactualReplayReport
 from .feedback import CandidateFeedbackReport
 from .models import (
@@ -49,6 +54,41 @@ service = InterviewService(
     evidence_judge=build_evidence_judge(),
 )
 voice = RealtimeVoiceCoordinator(service=service, store=store)
+principal_resolver = build_principal_resolver()
+
+
+def current_principal(
+    request: Request,
+) -> Principal:
+    return principal_resolver.resolve(request.headers)
+
+
+async def require_session_permission(
+    session_id: str,
+    principal: Principal,
+    permission: Permission,
+) -> InterviewSession:
+    session = await store.get_session(session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+    AccessPolicy.require(
+        principal,
+        permission,
+        session=session,
+    )
+    return session
+
+
+def require_global_permission(
+    principal: Principal,
+    permission: Permission,
+) -> None:
+    AccessPolicy.require(
+        principal,
+        permission,
+    )
+
+
 app = FastAPI(
     title="Nora Interviewer",
     version="0.4.0-dev",
