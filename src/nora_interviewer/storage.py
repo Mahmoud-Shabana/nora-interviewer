@@ -39,6 +39,8 @@ class Store(Protocol):
         session_id: str,
     ) -> bool: ...
 
+    async def ping(self) -> None: ...
+
     async def close(self) -> None: ...
 
 
@@ -112,6 +114,9 @@ class InMemoryStore:
                 )
                 is not None
             )
+
+    async def ping(self) -> None:
+        return None
 
     async def close(self) -> None:
         return None
