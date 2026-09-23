@@ -6,6 +6,9 @@ const state = {
   ws: null,
   competencies: [],
   answered: 0,
+  voiceEnabled: false,
+  recognition: null,
+  listening: false,
 };
 
 function slugify(text, i) {
@@ -38,6 +41,78 @@ function setThinking(on) {
   $("typing").classList.toggle("hidden", !on);
   $("answerBox").disabled = on;
   document.querySelector(".send").disabled = on;
+  $("micBtn").disabled = on;
+}
+
+function browserSpeechRecognition() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function speak(text) {
+  if (!state.voiceEnabled || !("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = state.session?.locale?.startsWith("ar") ? "ar-SA" : "en-US";
+  utterance.rate = 0.98;
+  window.speechSynthesis.speak(utterance);
+}
+
+function ensureRecognition() {
+  if (state.recognition) return state.recognition;
+  const Recognition = browserSpeechRecognition();
+  if (!Recognition) return null;
+
+  const recognition = new Recognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = state.session?.locale?.startsWith("ar") ? "ar-SA" : "en-US";
+
+  recognition.onstart = () => {
+    state.listening = true;
+    $("micBtn").classList.add("listening");
+    setConnection("Listening…");
+  };
+  recognition.onend = () => {
+    state.listening = false;
+    $("micBtn").classList.remove("listening");
+    if (state.ws?.readyState === WebSocket.OPEN) setConnection("Connected");
+  };
+  recognition.onerror = (event) => {
+    state.listening = false;
+    $("micBtn").classList.remove("listening");
+    setConnection(`Voice input: ${event.error || "error"}`, true);
+  };
+  recognition.onresult = (event) => {
+    let transcript = "";
+    for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      transcript += event.results[i][0].transcript;
+    }
+    $("answerBox").value = transcript.trim();
+  };
+
+  state.recognition = recognition;
+  return recognition;
+}
+
+function toggleMic() {
+  const recognition = ensureRecognition();
+  if (!recognition) {
+    setConnection("Speech recognition is not supported in this browser", true);
+    return;
+  }
+  if (state.listening) {
+    recognition.stop();
+  } else {
+    recognition.lang = state.session?.locale?.startsWith("ar") ? "ar-SA" : "en-US";
+    recognition.start();
+  }
+}
+
+function toggleVoice() {
+  state.voiceEnabled = !state.voiceEnabled;
+  $("voiceBtn").classList.toggle("active", state.voiceEnabled);
+  $("voiceBtn").textContent = state.voiceEnabled ? "Voice enabled" : "Enable voice";
+  if (!state.voiceEnabled && "speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
 function updateCoverage(tags = []) {
@@ -134,6 +209,7 @@ function connectSocket() {
       setThinking(false);
       const turn = packet.data;
       addMessage("nora", turn.text, turn.competency_tags?.join(" · ") || "Nora");
+      speak(turn.text);
       updateProgress(turn);
       $("answerBox").focus();
       return;
@@ -181,7 +257,14 @@ async function exportTrace() {
 $("setupForm").addEventListener("submit", createInterview);
 $("answerForm").addEventListener("submit", sendAnswer);
 $("exportBtn").addEventListener("click", exportTrace);
+$("voiceBtn").addEventListener("click", toggleVoice);
+$("micBtn").addEventListener("click", toggleMic);
 $("restartBtn").addEventListener("click", () => location.reload());
+
+if (!browserSpeechRecognition()) {
+  $("micBtn").disabled = true;
+  $("micBtn").title = "Speech recognition is not supported by this browser";
+}
 $("answerBox").addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
     $("answerForm").requestSubmit();
