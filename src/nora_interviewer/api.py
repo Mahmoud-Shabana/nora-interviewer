@@ -1099,6 +1099,33 @@ def _audio_error_payload(exc: Exception) -> dict:
     }
 
 
+def _tts_error_payload(exc: Exception) -> dict:
+    if isinstance(exc, StreamingTtsUnavailableError):
+        return {
+            "code": "tts_unavailable",
+            "message": str(exc),
+        }
+    if isinstance(exc, TtsStreamError):
+        return {
+            "code": exc.code,
+            "message": str(exc),
+        }
+    if isinstance(exc, ValidationError):
+        return {
+            "code": "invalid_tts_message",
+            "message": "TTS transport message failed validation",
+        }
+    if isinstance(exc, HTTPException):
+        return {
+            "code": f"http_{exc.status_code}",
+            "message": str(exc.detail),
+        }
+    return {
+        "code": "tts_transport_error",
+        "message": str(exc)[:1000],
+    }
+
+
 def _cancel_audio_expiry(stream_id: str) -> None:
     task = _audio_expiry_tasks.pop(
         stream_id,
@@ -1133,6 +1160,243 @@ def _schedule_audio_expiry(stream_id: str) -> None:
     _audio_expiry_tasks[stream_id] = (
         asyncio.create_task(expire())
     )
+
+
+@app.websocket("/v1/ws/tts/{session_id}")
+async def tts_socket(
+    websocket: WebSocket,
+    session_id: str,
+) -> None:
+    try:
+        principal = principal_resolver.resolve(
+            websocket.headers
+        )
+        session = await store.get_session(
+            session_id
+        )
+        if session is None:
+            await websocket.close(code=1008)
+            return
+        AccessPolicy.require(
+            principal,
+            Permission.USE_VOICE,
+            session=session,
+        )
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+
+    active_stream_id: str | None = None
+    pump_task: asyncio.Task | None = None
+    send_lock = asyncio.Lock()
+
+    async def send_json(payload: dict) -> None:
+        async with send_lock:
+            await websocket.send_json(payload)
+
+    async def pump_audio(
+        *,
+        stream_id: str,
+        turn_id: str,
+        generation: int,
+    ) -> None:
+        nonlocal active_stream_id, pump_task
+        try:
+            async for chunk in tts_bridge.chunks(
+                stream_id=stream_id
+            ):
+                async with send_lock:
+                    await websocket.send_json({
+                        "type": "audio_chunk",
+                        "data": {
+                            "stream_id": stream_id,
+                            "turn_id": turn_id,
+                            "sequence": chunk.sequence,
+                            "generation": chunk.generation,
+                            "bytes": len(chunk.audio),
+                        },
+                    })
+                    await websocket.send_bytes(
+                        chunk.audio
+                    )
+
+            current = voice.state(session_id)
+            interrupted = (
+                current.generation
+                != generation
+            )
+            await send_json({
+                "type": (
+                    "stream_cancelled"
+                    if interrupted
+                    else "stream_completed"
+                ),
+                "data": {
+                    "stream_id": stream_id,
+                    "turn_id": turn_id,
+                    "generation": generation,
+                    "reason": (
+                        "barge_in"
+                        if interrupted
+                        else None
+                    ),
+                },
+            })
+        except asyncio.CancelledError:
+            return
+        except WebSocketDisconnect:
+            return
+        except Exception as exc:
+            try:
+                await send_json({
+                    "type": "error",
+                    "error": _tts_error_payload(
+                        exc
+                    ),
+                })
+            except Exception:
+                return
+        finally:
+            if active_stream_id == stream_id:
+                active_stream_id = None
+            pump_task = None
+
+    try:
+        while True:
+            message = await websocket.receive_json()
+            message_type = str(
+                message.get("type", "")
+            )
+
+            if message_type == "ping":
+                await send_json({"type": "pong"})
+                continue
+
+            if message_type == "open":
+                if active_stream_id is not None:
+                    await send_json({
+                        "type": "error",
+                        "error": {
+                            "code": "tts_stream_already_open",
+                            "message": (
+                                "Cancel the active TTS stream "
+                                "before opening another one."
+                            ),
+                        },
+                    })
+                    continue
+
+                request = TtsStreamOpenRequest.model_validate(
+                    message.get("data", {})
+                )
+                opened = await tts_bridge.open(
+                    session_id=session_id,
+                    turn_id=request.turn_id,
+                    locale=request.locale,
+                    config=request.config,
+                )
+                active_stream_id = (
+                    opened.state.stream_id
+                )
+                await send_json({
+                    "type": "stream_opened",
+                    "data": opened.model_dump(
+                        mode="json"
+                    ),
+                })
+                pump_task = asyncio.create_task(
+                    pump_audio(
+                        stream_id=opened.state.stream_id,
+                        turn_id=opened.state.turn_id,
+                        generation=opened.state.generation,
+                    )
+                )
+                continue
+
+            if message_type == "cancel":
+                if active_stream_id is None:
+                    await send_json({
+                        "type": "stream_cancelled",
+                        "data": None,
+                    })
+                    continue
+
+                stream_id = active_stream_id
+                await tts_bridge.close(
+                    stream_id=stream_id,
+                    reason="client_cancelled",
+                )
+                if (
+                    pump_task is not None
+                    and not pump_task.done()
+                ):
+                    pump_task.cancel()
+                active_stream_id = None
+                pump_task = None
+                await send_json({
+                    "type": "stream_cancelled",
+                    "data": {
+                        "stream_id": stream_id,
+                        "reason": "client_cancelled",
+                    },
+                })
+                continue
+
+            await send_json({
+                "type": "error",
+                "error": {
+                    "code": "unknown_tts_message",
+                    "message": (
+                        "Expected open, cancel, or ping."
+                    ),
+                },
+            })
+
+    except WebSocketDisconnect:
+        if active_stream_id is not None:
+            try:
+                await tts_bridge.close(
+                    stream_id=active_stream_id,
+                    reason="client_disconnect",
+                )
+            except TtsStreamNotFoundError:
+                pass
+        if (
+            pump_task is not None
+            and not pump_task.done()
+        ):
+            pump_task.cancel()
+        return
+    except (
+        StreamingTtsUnavailableError,
+        TtsStreamConflictError,
+        TtsStreamNotFoundError,
+        TtsStreamError,
+        ValidationError,
+        HTTPException,
+    ) as exc:
+        try:
+            await send_json({
+                "type": "error",
+                "error": _tts_error_payload(exc),
+            })
+        finally:
+            if active_stream_id is not None:
+                try:
+                    await tts_bridge.close(
+                        stream_id=active_stream_id,
+                        reason="transport_error",
+                    )
+                except TtsStreamNotFoundError:
+                    pass
+            if (
+                pump_task is not None
+                and not pump_task.done()
+            ):
+                pump_task.cancel()
+            await websocket.close(code=1008)
 
 
 @app.websocket("/v1/ws/audio/{session_id}")
