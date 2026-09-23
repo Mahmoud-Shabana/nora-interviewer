@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
+from .audit import verify_event_chain
 from .models import EventType, InterviewEvent, SessionStatus, StrictModel
 
 
@@ -18,10 +19,19 @@ class ReplayState(StrictModel):
     submitted_tool_ids: list[str] = Field(default_factory=list)
     evaluated_tool_ids: list[str] = Field(default_factory=list)
     event_count: int = 0
+    audit_chain_verified: bool | None = None
+    audit_head_hash: str | None = None
 
 
 def replay_events(session_id: str, events: list[InterviewEvent]) -> ReplayState:
-    state = ReplayState(session_id=session_id)
+    head_hash = verify_event_chain(events)
+    state = ReplayState(
+        session_id=session_id,
+        audit_chain_verified=(
+            True if head_hash is not None else None
+        ),
+        audit_head_hash=head_hash,
+    )
 
     expected_seq = 1
     for event in events:
