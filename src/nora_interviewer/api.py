@@ -2151,6 +2151,10 @@ async def audio_socket(
                     result.vad is not None
                     and result.vad.auto_commit_recommended
                 ):
+                    await voice.vad_endpoint(
+                        session_id,
+                        result.vad,
+                    )
                     await audio_bridge.commit(
                         stream_id=active_stream_id,
                     )
