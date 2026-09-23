@@ -1,19 +1,28 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
+from .config import build_brain
 from .models import CandidateResponse, CreateSession, InterviewSession, JobSpec, SessionStep, VoxRubricTrace
-from .providers import RuleBasedBrain
 from .service import InterviewService
 from .storage import InMemoryStore
+from .web import WEB_DIR, render_interview_room
 
 store = InMemoryStore()
-service = InterviewService(store=store, brain=RuleBasedBrain())
+service = InterviewService(store=store, brain=build_brain())
 app = FastAPI(
     title="Nora Interviewer",
-    version="0.1.0",
+    version="0.2.0",
     description="Provider-neutral orchestration API for auditable AI interviews.",
 )
+app.mount("/assets", StaticFiles(directory=WEB_DIR), name="assets")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def home() -> HTMLResponse:
+    return HTMLResponse(render_interview_room())
 
 
 @app.get("/health")
@@ -63,9 +72,13 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
             await websocket.send_json({"type": "interviewer_turn", "data": step.interviewer_turn.model_dump(mode="json")})
         while step.status.value != "completed":
             event = await websocket.receive_json()
+            if event.get("type") == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
             if event.get("type") != "candidate_text" or not str(event.get("text", "")).strip():
                 await websocket.send_json({"type": "error", "error": "Expected {type: candidate_text, text: ...}"})
                 continue
+            await websocket.send_json({"type": "candidate_ack"})
             step = await service.answer(session_id, str(event["text"]).strip())
             if step.interviewer_turn:
                 await websocket.send_json({"type": "interviewer_turn", "data": step.interviewer_turn.model_dump(mode="json")})
