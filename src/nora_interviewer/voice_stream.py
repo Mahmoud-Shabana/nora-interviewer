@@ -159,3 +159,21 @@ class StreamingSpeechProvider(Protocol):
 
 def new_reconnect_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+
+class AudioStreamOpenRequest(StrictModel):
+    locale: str = Field(default="en", min_length=2, max_length=32)
+    config: AudioStreamConfig = Field(default_factory=AudioStreamConfig)
+
+
+class AudioStreamReconnectRequest(StrictModel):
+    stream_id: str = Field(min_length=1)
+    reconnect_token: str = Field(min_length=20)
+    generation: int = Field(ge=0)
+    next_sequence: int = Field(ge=0)
+
+
+class AudioStreamCloseRequest(StrictModel):
+    stream_id: str = Field(min_length=1)
+    cancel_provider: bool = False
