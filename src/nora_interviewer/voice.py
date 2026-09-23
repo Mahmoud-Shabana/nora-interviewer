@@ -10,7 +10,7 @@ from pydantic import Field
 from .audit import append_event
 from .models import EventType, SessionStatus, StrictModel, ToolInvocation, Turn
 from .service import InterviewService
-from .storage import Store
+from .storage import Store, StoreConflictError
 
 
 class VoicePhase(str, Enum):
@@ -92,6 +92,18 @@ class RealtimeVoiceCoordinator:
             raise HTTPException(404, "Session not found")
         return session
 
+    async def _persist(self, session) -> None:
+        try:
+            await self.store.put_session(session)
+        except StoreConflictError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Voice state changed concurrently. "
+                    "Reload the session and retry the voice event."
+                ),
+            ) from exc
+
     async def speech_started(self, session_id: str) -> VoiceSessionState:
         session = await self._session(session_id)
         if session.status is SessionStatus.COMPLETED:
@@ -134,7 +146,7 @@ class RealtimeVoiceCoordinator:
                 "started_at_ms": now,
             },
         )
-        await self.store.put_session(session)
+        await self._persist(session)
         return state.model_copy(deep=True)
 
     async def transcript_partial(
@@ -159,7 +171,7 @@ class RealtimeVoiceCoordinator:
                 "generation": state.generation,
             },
         )
-        await self.store.put_session(session)
+        await self._persist(session)
         return state.model_copy(deep=True)
 
     async def transcript_final(
@@ -192,7 +204,7 @@ class RealtimeVoiceCoordinator:
                 "speech_to_final_ms": state.last_speech_to_final_ms,
             },
         )
-        await self.store.put_session(session)
+        await self._persist(session)
 
         state.phase = VoicePhase.PROCESSING
         response_started = self._now_ms()
@@ -224,7 +236,7 @@ class RealtimeVoiceCoordinator:
                 ),
             },
         )
-        await self.store.put_session(current)
+        await self._persist(current)
 
         if step.status is SessionStatus.COMPLETED and step.interviewer_turn is None:
             state.phase = VoicePhase.CLOSED
@@ -278,7 +290,7 @@ class RealtimeVoiceCoordinator:
                 "response_to_tts_ms": state.last_response_to_tts_ms,
             },
         )
-        await self.store.put_session(session)
+        await self._persist(session)
         return state.model_copy(deep=True)
 
     async def tts_completed(
@@ -313,7 +325,7 @@ class RealtimeVoiceCoordinator:
             if session.status is SessionStatus.COMPLETED
             else VoicePhase.IDLE
         )
-        await self.store.put_session(session)
+        await self._persist(session)
         return state.model_copy(deep=True)
 
     async def tts_cancelled(
@@ -347,5 +359,5 @@ class RealtimeVoiceCoordinator:
         state.active_tts_turn_id = None
         state.response_ready_at_ms = None
         state.phase = VoicePhase.IDLE
-        await self.store.put_session(session)
+        await self._persist(session)
         return state.model_copy(deep=True)
