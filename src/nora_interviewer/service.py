@@ -791,6 +791,15 @@ class InterviewService:
             for event in session.events
             if event.type.value.startswith("voice_")
         ]
+        evidence_judge_failures = [
+            {
+                "seq": event.seq,
+                "turn_id": event.turn_id,
+                "payload": event.payload,
+            }
+            for event in session.events
+            if event.type is EventType.EVIDENCE_JUDGE_FAILED
+        ]
         return VoxRubricTrace(
             session_id=session.id,
             role=job.title,
@@ -806,6 +815,7 @@ class InterviewService:
                 "interviewer_turns": session.asked_questions,
                 "candidate_controls": candidate_controls,
                 "voice_events": voice_events,
+                "evidence_judge_failures": evidence_judge_failures,
                 "evidence_graph": {
                     key: value.model_dump(mode="json")
                     for key, value in session.evidence_graph.items()
