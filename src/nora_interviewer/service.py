@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from .audit import append_event
 from .coding import CodingChallengeManager, CodingChallengeRequest, CodingInterviewTool
 from .controls import handle_candidate_control
+from .counterfactual import CounterfactualReplayReport, CounterfactualReplayer
 from .evidence import EvidenceGraph
 from .feedback import CandidateFeedbackReport, build_candidate_feedback
 from .models import (
@@ -64,6 +65,7 @@ class InterviewService:
                 runner=default_sandbox_runner(),
             )
         )
+        self.counterfactual_replayer = CounterfactualReplayer()
 
     async def create_job(self, job: JobSpec) -> JobSpec:
         await self.store.put_job(job)
@@ -474,6 +476,17 @@ class InterviewService:
         session, _ = await self._get(session_id)
         return replay_events(session.id, session.events)
 
+    async def decision_replay(
+        self,
+        session_id: str,
+    ) -> CounterfactualReplayReport:
+        session, job = await self._get(session_id)
+        return await self.counterfactual_replayer.compare(
+            session,
+            job,
+            self.brain,
+        )
+
     async def export_voxrubric(self, session_id: str) -> VoxRubricTrace:
         session, job = await self._get(session_id)
         turns = [
@@ -583,6 +596,8 @@ class InterviewService:
                 "question_lane": lane.value,
                 "decision_reason": decision.reason,
                 "competency_tags": decision.competency_tags,
+                "covered_competencies": list(session.covered_competencies),
+                "asked_questions": session.asked_questions,
             },
         )
         return turn
