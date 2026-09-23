@@ -124,6 +124,10 @@ from .voice_output import (
     VoiceTransportCapabilities,
 )
 from .voice_output_bridge import VoiceOutputBridge
+from .websocket_metrics import (
+    WebSocketMetrics,
+    WebSocketMetricsMiddleware,
+)
 from .voice_stream_bridge import (
     StreamingFinalTranscript,
     StreamingPartialTranscript,
@@ -179,6 +183,7 @@ tts_bridge = VoiceOutputBridge(
     voice=voice,
 )
 http_metrics = HttpRequestMetrics()
+websocket_metrics = WebSocketMetrics()
 operations = OperationsService(
     store=store,
     review_service=review_service,
@@ -186,6 +191,7 @@ operations = OperationsService(
     audio_stream_manager=audio_stream_manager,
     tts_bridge=tts_bridge,
     http_metrics=http_metrics,
+    websocket_metrics=websocket_metrics,
 )
 AUDIO_RECONNECT_GRACE_SECONDS = 30.0
 _audio_expiry_tasks: dict[str, asyncio.Task] = {}
@@ -282,6 +288,10 @@ app = FastAPI(
     version=API_VERSION,
     description="Provider-neutral orchestration API for auditable AI interviews.",
     lifespan=lifespan,
+)
+app.add_middleware(
+    WebSocketMetricsMiddleware,
+    registry=websocket_metrics,
 )
 app.mount("/assets", StaticFiles(directory=WEB_DIR), name="assets")
 
