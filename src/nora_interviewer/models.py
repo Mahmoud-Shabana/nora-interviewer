@@ -94,6 +94,8 @@ class EventType(str, Enum):
     EVIDENCE_OBSERVED = "evidence_observed"
     EVIDENCE_JUDGE_FAILED = "evidence_judge_failed"
     EVIDENCE_JUDGE_DISAGREEMENT = "evidence_judge_disagreement"
+    EVIDENCE_JUDGE_RUN_RECORDED = "evidence_judge_run_recorded"
+    EVIDENCE_SUPERSEDED = "evidence_superseded"
     INTEGRITY_SIGNAL = "integrity_signal"
     INTEGRITY_REVIEWED = "integrity_reviewed"
     TOOL_OPENED = "tool_opened"
@@ -195,6 +197,25 @@ class EvidenceItem(StrictModel):
     quote: str | None = Field(default=None, max_length=4000)
     note: str = Field(min_length=1)
     source: str = "interview"
+    judge_run_id: str | None = Field(default=None, max_length=160)
+    active: bool = True
+
+
+class EvidenceJudgeRun(StrictModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    judge_id: str = Field(min_length=1, max_length=500)
+    question_turn_id: str
+    answer_turn_id: str
+    competency_ids: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    transcript_revision_count: int = Field(default=0, ge=0)
+    observation_ids: list[str] = Field(default_factory=list)
+    audit: dict[str, Any] = Field(default_factory=dict)
+    error_type: str | None = Field(default=None, max_length=200)
+    error: str | None = Field(default=None, max_length=2000)
+    supersedes_run_id: str | None = None
 
 
 class CompetencyEvidence(StrictModel):
@@ -350,6 +371,7 @@ class InterviewSession(StrictModel):
     asked_anchor_competencies: list[str] = Field(default_factory=list)
     asked_questions: int = 0
     evidence_graph: dict[str, CompetencyEvidence] = Field(default_factory=dict)
+    evidence_judge_runs: list[EvidenceJudgeRun] = Field(default_factory=list)
     transcript_revisions: list[TranscriptRevision] = Field(default_factory=list)
     appeals: list[CandidateAppeal] = Field(default_factory=list)
     integrity_signals: list[IntegritySignal] = Field(default_factory=list)
@@ -395,6 +417,7 @@ class EvidenceObservation(StrictModel):
     quote: str | None = Field(default=None, max_length=4000)
     note: str = Field(min_length=1)
     source: str = Field(default="evaluator", min_length=1, max_length=160)
+    judge_run_id: str | None = Field(default=None, max_length=160)
 
 
 class VoxRubricTrace(StrictModel):
