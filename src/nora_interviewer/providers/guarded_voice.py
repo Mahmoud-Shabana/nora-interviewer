@@ -28,6 +28,13 @@ class _GuardedSpeechSession:
         self.inner = inner
         self.registry = registry
         self.key = key
+        self._healthy = False
+
+    async def _mark_healthy(self) -> None:
+        if self._healthy:
+            return
+        self._healthy = True
+        await self.registry.record_success(self.key)
 
     async def push_audio(
         self,
@@ -47,6 +54,7 @@ class _GuardedSpeechSession:
     ) -> AsyncIterator[SpeechRecognitionEvent]:
         try:
             async for event in self.inner.events():
+                await self._mark_healthy()
                 yield event
         except Exception as exc:
             await self.registry.record_failure(
@@ -110,7 +118,6 @@ class GuardedStreamingSpeechProvider:
             )
             raise
 
-        await self.registry.record_success(self.key)
         return _GuardedSpeechSession(
             inner=session,
             registry=self.registry,
@@ -129,12 +136,20 @@ class _GuardedTtsSession:
         self.inner = inner
         self.registry = registry
         self.key = key
+        self._healthy = False
+
+    async def _mark_healthy(self) -> None:
+        if self._healthy:
+            return
+        self._healthy = True
+        await self.registry.record_success(self.key)
 
     async def chunks(
         self,
     ) -> AsyncIterator[TtsAudioChunk]:
         try:
             async for chunk in self.inner.chunks():
+                await self._mark_healthy()
                 yield chunk
         except Exception as exc:
             await self.registry.record_failure(
@@ -192,7 +207,6 @@ class GuardedStreamingTtsProvider:
             )
             raise
 
-        await self.registry.record_success(self.key)
         return _GuardedTtsSession(
             inner=session,
             registry=self.registry,
