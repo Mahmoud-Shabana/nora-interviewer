@@ -92,6 +92,18 @@ class RealtimeVoiceCoordinator:
             raise HTTPException(404, "Session not found")
         return session
 
+    @staticmethod
+    def _ensure_input_allowed(
+        session,
+        state: VoiceSessionState,
+    ) -> None:
+        if session.status is SessionStatus.COMPLETED:
+            state.phase = VoicePhase.CLOSED
+            raise HTTPException(409, "Interview is already complete")
+        if session.status is SessionStatus.CANCELLED:
+            state.phase = VoicePhase.CLOSED
+            raise HTTPException(409, "Interview is cancelled")
+
     async def _persist(self, session) -> None:
         try:
             await self.store.put_session(session)
@@ -106,10 +118,8 @@ class RealtimeVoiceCoordinator:
 
     async def speech_started(self, session_id: str) -> VoiceSessionState:
         session = await self._session(session_id)
-        if session.status is SessionStatus.COMPLETED:
-            raise HTTPException(409, "Interview is already complete")
-
         state = self._state_ref(session_id)
+        self._ensure_input_allowed(session, state)
         now = self._now_ms()
 
         if state.phase is VoicePhase.SPEAKING:
@@ -156,6 +166,7 @@ class RealtimeVoiceCoordinator:
     ) -> VoiceSessionState:
         session = await self._session(session_id)
         state = self._state_ref(session_id)
+        self._ensure_input_allowed(session, state)
         if state.phase is not VoicePhase.LISTENING:
             raise HTTPException(
                 409,
@@ -181,6 +192,7 @@ class RealtimeVoiceCoordinator:
     ) -> VoiceTurnResult:
         session = await self._session(session_id)
         state = self._state_ref(session_id)
+        self._ensure_input_allowed(session, state)
         if state.phase is not VoicePhase.LISTENING:
             raise HTTPException(
                 409,
@@ -255,6 +267,9 @@ class RealtimeVoiceCoordinator:
     ) -> VoiceSessionState:
         session = await self._session(session_id)
         state = self._state_ref(session_id)
+        if session.status is SessionStatus.CANCELLED:
+            state.phase = VoicePhase.CLOSED
+            raise HTTPException(409, "Interview is cancelled")
 
         known_turn = next(
             (turn for turn in session.turns if turn.id == event.turn_id),
@@ -360,4 +375,42 @@ class RealtimeVoiceCoordinator:
         state.response_ready_at_ms = None
         state.phase = VoicePhase.IDLE
         await self._persist(session)
+        return state.model_copy(deep=True)
+
+
+    async def close_session(
+        self,
+        session_id: str,
+        *,
+        reason: str = "session_cancelled",
+    ) -> VoiceSessionState:
+        session = await self._session(session_id)
+        state = self._state_ref(session_id)
+
+        state.generation += 1
+        active_turn_id = state.active_tts_turn_id
+        if active_turn_id is not None:
+            turn = next(
+                (
+                    item
+                    for item in session.turns
+                    if item.id == active_turn_id
+                ),
+                None,
+            )
+            append_event(
+                session,
+                EventType.VOICE_TTS_CANCELLED,
+                turn=turn,
+                payload={
+                    "generation": state.generation,
+                    "reason": reason,
+                },
+            )
+            await self._persist(session)
+
+        state.active_tts_turn_id = None
+        state.response_ready_at_ms = None
+        state.speech_started_at_ms = None
+        state.phase = VoicePhase.CLOSED
         return state.model_copy(deep=True)
