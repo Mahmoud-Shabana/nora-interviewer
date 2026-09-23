@@ -21,6 +21,9 @@ const state = {
   activeTtsTurnId: null,
   bargeInPending: false,
   recognitionFinalSent: false,
+  voiceTransport: null,
+  serverTtsPlayer: null,
+  lastSpokenTurn: null,
 };
 
 function slugify(text, i) {
@@ -65,8 +68,8 @@ function sendVoiceEvent(type, data = {}) {
   state.ws.send(JSON.stringify({type, data}));
 }
 
-function speak(turn) {
-  if (!state.voiceEnabled || !("speechSynthesis" in window) || !turn?.text) return;
+function browserSpeak(turn) {
+  if (!("speechSynthesis" in window) || !turn?.text) return;
 
   if (state.activeTtsTurnId) {
     sendVoiceEvent("voice_tts_cancelled", {turn_id: state.activeTtsTurnId});
@@ -110,6 +113,104 @@ function speak(turn) {
   window.speechSynthesis.speak(utterance);
 }
 
+function ensureServerTtsPlayer() {
+  if (
+    !state.voiceTransport?.streaming_tts_enabled
+    || !window.NoraServerTtsPlayer
+    || !state.session
+  ) {
+    return null;
+  }
+  if (state.serverTtsPlayer) {
+    return state.serverTtsPlayer;
+  }
+
+  state.serverTtsPlayer = new window.NoraServerTtsPlayer({
+    sessionId: state.session.id,
+    locale: (
+      state.session.locale?.startsWith("ar")
+      ? "ar-SA"
+      : "en-US"
+    ),
+    config: state.voiceTransport.preferred_tts_config,
+    onState: ({phase, turnId}) => {
+      if (phase === "speaking") {
+        state.activeTtsTurnId = turnId;
+        setConnection("Nora speaking · server TTS");
+      } else if (phase === "idle") {
+        if (!turnId || state.activeTtsTurnId === turnId) {
+          state.activeTtsTurnId = null;
+        }
+        if (state.ws?.readyState === WebSocket.OPEN) {
+          setConnection("Connected");
+        }
+      }
+    },
+    onError: (error, {hadAudio}) => {
+      state.activeTtsTurnId = null;
+      setConnection(
+        "Server voice error · browser fallback available",
+        true,
+      );
+      if (
+        !hadAudio
+        && state.voiceEnabled
+        && state.lastSpokenTurn
+      ) {
+        browserSpeak(state.lastSpokenTurn);
+      }
+    },
+  });
+  return state.serverTtsPlayer;
+}
+
+function speak(turn) {
+  if (!state.voiceEnabled || !turn?.text) return;
+  state.lastSpokenTurn = turn;
+
+  const player = ensureServerTtsPlayer();
+  if (player) {
+    player.playTurn(turn).catch((error) => {
+      setConnection(
+        "Server voice unavailable · using browser voice",
+        true,
+      );
+      browserSpeak(turn);
+    });
+    return;
+  }
+
+  browserSpeak(turn);
+}
+
+async function loadVoiceTransportCapabilities() {
+  if (!state.session) return;
+  try {
+    state.voiceTransport = await jsonFetch(
+      `/v1/sessions/${state.session.id}/voice/capabilities`
+    );
+  } catch {
+    state.voiceTransport = {
+      streaming_stt_enabled: false,
+      streaming_tts_enabled: false,
+    };
+  }
+
+  if (state.voiceTransport.streaming_tts_enabled) {
+    $("voiceTitle").textContent = "Server voice";
+    $("voiceDescription").textContent = (
+      "Nora can stream synthesized audio from the server. "
+      + "The microphone still uses the browser demo input when supported."
+    );
+  } else {
+    $("voiceTitle").textContent = "Browser voice";
+    $("voiceDescription").textContent = (
+      "Server TTS is not configured, so this session can use "
+      + "the browser speech synthesis fallback."
+    );
+  }
+}
+
 function ensureRecognition() {
   if (state.recognition) return state.recognition;
   const Recognition = browserSpeechRecognition();
@@ -125,9 +226,12 @@ function ensureRecognition() {
     state.recognitionFinalSent = false;
     $("micBtn").classList.add("listening");
 
-    if (state.activeTtsTurnId && "speechSynthesis" in window) {
+    if (state.activeTtsTurnId) {
       state.bargeInPending = true;
-      window.speechSynthesis.cancel();
+      state.serverTtsPlayer?.stopLocalPlayback();
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
     }
     sendVoiceEvent("voice_speech_started");
     setConnection("Listening…");
@@ -201,15 +305,41 @@ function toggleMic() {
   }
 }
 
-function toggleVoice() {
+async function toggleVoice() {
   state.voiceEnabled = !state.voiceEnabled;
   $("voiceBtn").classList.toggle("active", state.voiceEnabled);
   $("voiceBtn").textContent = state.voiceEnabled ? "Voice enabled" : "Enable voice";
-  if (!state.voiceEnabled && "speechSynthesis" in window) {
-    if (state.activeTtsTurnId) {
-      sendVoiceEvent("voice_tts_cancelled", {turn_id: state.activeTtsTurnId});
-      state.activeTtsTurnId = null;
+
+  if (state.voiceEnabled) {
+    const player = ensureServerTtsPlayer();
+    if (player) {
+      try {
+        await player.enable();
+        setConnection("Server voice ready");
+      } catch (error) {
+        setConnection(
+          "Server voice unavailable · browser fallback ready",
+          true,
+        );
+      }
     }
+    return;
+  }
+
+  if (state.serverTtsPlayer) {
+    await state.serverTtsPlayer.cancel("voice_disabled");
+  }
+  if ("speechSynthesis" in window) {
+    if (
+      state.activeTtsTurnId
+      && !state.voiceTransport?.streaming_tts_enabled
+    ) {
+      sendVoiceEvent(
+        "voice_tts_cancelled",
+        {turn_id: state.activeTtsTurnId},
+      );
+    }
+    state.activeTtsTurnId = null;
     window.speechSynthesis.cancel();
   }
 }
@@ -375,6 +505,7 @@ async function createInterview(event) {
         integrity_level: $("integrityLevel").value,
       }),
     });
+    await loadVoiceTransportCapabilities();
 
     $("roomRole").textContent = state.job.title;
     $("roomCandidate").textContent = state.session.candidate_ref;
