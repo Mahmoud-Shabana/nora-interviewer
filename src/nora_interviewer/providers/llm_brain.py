@@ -112,6 +112,11 @@ class LLMInterviewBrain:
             c.id for c in job.competencies
             if c.id not in session.covered_competencies
         ]
+        used_template_ids = sorted(
+            str(tool.payload.get("template_id"))
+            for tool in session.tools
+            if tool.payload.get("template_id")
+        )
         tool_block = "\n".join(
             (
                 f"- {item.template_id}: {item.purpose}; "
@@ -152,6 +157,7 @@ ROLE DESCRIPTION: {job.description}
 LOCALE: {session.locale}
 QUESTION BUDGET: {session.asked_questions}/{job.max_questions}
 TOOL BUDGET: {len(session.tools)}/{job.max_tools}
+USED TOOL TEMPLATES: {used_template_ids}
 COVERED: {session.covered_competencies}
 REMAINING: {remaining}
 
@@ -184,6 +190,11 @@ Use open_tool only when the practical artifact would materially improve job-rela
             raise ValueError("non-complete action must name at least one competency")
 
         policy = {item.template_id: item for item in job.tool_templates}
+        used_templates = {
+            str(tool.payload.get("template_id"))
+            for tool in session.tools
+            if tool.payload.get("template_id")
+        }
         if output.action is BrainAction.OPEN_TOOL:
             if not output.tool_template_id:
                 raise ValueError("open_tool action requires tool_template_id")
@@ -194,6 +205,10 @@ Use open_tool only when the practical artifact would materially improve job-rela
                 )
             if len(session.tools) >= job.max_tools:
                 raise ValueError("model requested a tool after the job tool budget was exhausted")
+            if output.tool_template_id in used_templates:
+                raise ValueError(
+                    f"model requested a tool template already used: {output.tool_template_id}"
+                )
             if allowed.competency_ids:
                 outside = sorted(
                     set(output.competency_ids) - set(allowed.competency_ids)
