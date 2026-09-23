@@ -8,6 +8,7 @@ from .models import (
     IntegrityReviewStatus,
     InterviewSession,
     JobSpec,
+    ReviewAssignmentStatus,
     StrictModel,
     ToolStatus,
 )
@@ -33,6 +34,29 @@ class EvidenceJudgeRunSummary(StrictModel):
     failed: bool
     stale: bool
     supersedes_run_id: str | None = None
+
+
+class ReviewAssignmentCreateRequest(StrictModel):
+    reviewer_id: str = Field(min_length=1, max_length=256)
+    note: str | None = Field(default=None, max_length=5000)
+
+
+class ReviewAssignmentActionRequest(StrictModel):
+    note: str | None = Field(default=None, max_length=5000)
+
+
+class ReviewAssignmentSummary(StrictModel):
+    id: str
+    reviewer_id: str
+    assigned_by: str
+    status: ReviewAssignmentStatus
+    created_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    cancelled_at: str | None = None
+    assignment_note: str | None = None
+    completion_note: str | None = None
+    cancellation_reason: str | None = None
 
 
 class ReviewReason(StrictModel):
@@ -69,6 +93,7 @@ class RecruiterSessionReport(StrictModel):
     status: str
     competencies: list[CompetencyReviewSummary]
     evidence_judge_runs: list[EvidenceJudgeRunSummary] = Field(default_factory=list)
+    review_assignments: list[ReviewAssignmentSummary] = Field(default_factory=list)
     reasons: list[ReviewReason] = Field(default_factory=list)
     appeals: list[AppealReviewSummary] = Field(default_factory=list)
     integrity: list[IntegrityReviewSummary] = Field(default_factory=list)
@@ -93,6 +118,8 @@ class ReviewDashboardSummary(StrictModel):
     unresolved_tools: int = Field(ge=0)
     stale_evidence_runs: int = Field(default=0, ge=0)
     failed_evidence_runs: int = Field(default=0, ge=0)
+    assigned_reviews: int = Field(default=0, ge=0)
+    unassigned_review_required: int = Field(default=0, ge=0)
     completed_sessions: int = Field(ge=0)
 
 
@@ -123,6 +150,8 @@ class ReviewQueueItem(StrictModel):
     unresolved_tools: int = Field(ge=0)
     stale_evidence_runs: int = Field(default=0, ge=0)
     failed_evidence_runs: int = Field(default=0, ge=0)
+    assigned_reviewer_id: str | None = None
+    assignment_status: ReviewAssignmentStatus | None = None
 
 
 def build_recruiter_report(
@@ -243,7 +272,37 @@ def build_recruiter_report(
         for item in evidence_judge_runs
     )
 
-    appeals = [        AppealReviewSummary(
+    review_assignments = [
+        ReviewAssignmentSummary(
+            id=item.id,
+            reviewer_id=item.reviewer_id,
+            assigned_by=item.assigned_by,
+            status=item.status,
+            created_at=item.created_at.isoformat(),
+            started_at=(
+                item.started_at.isoformat()
+                if item.started_at
+                else None
+            ),
+            completed_at=(
+                item.completed_at.isoformat()
+                if item.completed_at
+                else None
+            ),
+            cancelled_at=(
+                item.cancelled_at.isoformat()
+                if item.cancelled_at
+                else None
+            ),
+            assignment_note=item.assignment_note,
+            completion_note=item.completion_note,
+            cancellation_reason=item.cancellation_reason,
+        )
+        for item in session.review_assignments
+    ]
+
+    appeals = [
+        AppealReviewSummary(
             id=item.id,
             message=item.message,
             turn_ids=item.turn_ids,
@@ -338,6 +397,7 @@ def build_recruiter_report(
         status=session.status.value,
         competencies=competencies,
         evidence_judge_runs=evidence_judge_runs,
+        review_assignments=review_assignments,
         reasons=reasons,
         appeals=appeals,
         integrity=integrity,
@@ -365,4 +425,30 @@ def to_queue_item(report: RecruiterSessionReport) -> ReviewQueueItem:
         unresolved_tools=report.unresolved_tools,
         stale_evidence_runs=report.stale_evidence_runs,
         failed_evidence_runs=report.failed_evidence_runs,
+        assigned_reviewer_id=(
+            next(
+                (
+                    item.reviewer_id
+                    for item in reversed(report.review_assignments)
+                    if item.status in {
+                        ReviewAssignmentStatus.OPEN,
+                        ReviewAssignmentStatus.IN_REVIEW,
+                    }
+                ),
+                None,
+            )
+        ),
+        assignment_status=(
+            next(
+                (
+                    item.status
+                    for item in reversed(report.review_assignments)
+                    if item.status in {
+                        ReviewAssignmentStatus.OPEN,
+                        ReviewAssignmentStatus.IN_REVIEW,
+                    }
+                ),
+                None,
+            )
+        ),
     )
