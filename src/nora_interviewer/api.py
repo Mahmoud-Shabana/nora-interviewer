@@ -337,7 +337,7 @@ async def operational_metrics(
     snapshot = await operations.snapshot()
     return PlainTextResponse(
         render_prometheus(snapshot),
-        media_type="text/plain; version=0.0.4; charset=utf-8",
+        media_type="text/plain; version=0.0.4",
         headers={
             "Cache-Control": "no-store",
         },
