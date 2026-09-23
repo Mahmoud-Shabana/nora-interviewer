@@ -254,6 +254,14 @@ class ToolEvaluation(StrictModel):
     evidence: dict[str, Any] = Field(default_factory=dict)
 
 
+class ToolStep(StrictModel):
+    tool_id: str
+    evaluation: ToolEvaluation
+    interviewer_turn: Turn | None = None
+    next_tool_invocation: ToolInvocation | None = None
+    status: SessionStatus
+
+
 class InterviewEvent(StrictModel):
     seq: int = Field(ge=1)
     type: EventType
