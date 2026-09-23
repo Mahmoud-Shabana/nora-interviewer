@@ -322,6 +322,7 @@ class EvidenceObservation(StrictModel):
     state: EvidenceState
     confidence: float = Field(ge=0.0, le=1.0)
     note: str = Field(min_length=1)
+    source: str = Field(default="evaluator", min_length=1, max_length=160)
 
 
 class VoxRubricTrace(StrictModel):
