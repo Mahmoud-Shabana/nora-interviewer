@@ -25,6 +25,7 @@ from .postgres_store import PostgresStore
 from .provider_health import ProviderHealthRegistry
 from .sqlite_store import SqliteStore
 from .storage import InMemoryStore
+from .vad import VadConfig
 
 
 def build_brain():
@@ -482,6 +483,58 @@ def build_streaming_tts_provider():
     raise RuntimeError(
         f"Unsupported NORA_STREAMING_TTS_MODE: {mode}"
     )
+
+
+def build_vad_config() -> VadConfig | None:
+    mode = os.getenv(
+        "NORA_VAD_MODE",
+        "disabled",
+    ).strip().lower()
+
+    if mode == "disabled":
+        return None
+    if mode != "energy":
+        raise RuntimeError(
+            f"Unsupported NORA_VAD_MODE: {mode}"
+        )
+
+    try:
+        return VadConfig(
+            speech_threshold=float(
+                os.getenv(
+                    "NORA_VAD_SPEECH_THRESHOLD",
+                    "0.02",
+                )
+            ),
+            release_threshold=float(
+                os.getenv(
+                    "NORA_VAD_RELEASE_THRESHOLD",
+                    "0.012",
+                )
+            ),
+            speech_start_ms=int(
+                os.getenv(
+                    "NORA_VAD_SPEECH_START_MS",
+                    "120",
+                )
+            ),
+            speech_end_silence_ms=int(
+                os.getenv(
+                    "NORA_VAD_END_SILENCE_MS",
+                    "700",
+                )
+            ),
+            max_utterance_ms=int(
+                os.getenv(
+                    "NORA_VAD_MAX_UTTERANCE_MS",
+                    "120000",
+                )
+            ),
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Invalid energy VAD configuration: {exc}"
+        ) from exc
 
 
 def build_voice_provider_health_registry() -> ProviderHealthRegistry:
