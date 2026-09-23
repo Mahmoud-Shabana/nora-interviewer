@@ -44,6 +44,11 @@ class AppealStatus(str, Enum):
     REVIEWED = "reviewed"
 
 
+class IntegrityReviewStatus(str, Enum):
+    PENDING = "pending"
+    REVIEWED = "reviewed"
+
+
 class IntegrityLevel(str, Enum):
     NONE = "none"
     IDENTITY = "identity"
@@ -89,6 +94,7 @@ class EventType(str, Enum):
     EVIDENCE_JUDGE_FAILED = "evidence_judge_failed"
     EVIDENCE_JUDGE_DISAGREEMENT = "evidence_judge_disagreement"
     INTEGRITY_SIGNAL = "integrity_signal"
+    INTEGRITY_REVIEWED = "integrity_reviewed"
     TOOL_OPENED = "tool_opened"
     TOOL_SUBMITTED = "tool_submitted"
     TOOL_EVALUATED = "tool_evaluated"
@@ -239,6 +245,9 @@ class IntegritySignal(StrictModel):
     note: str = Field(min_length=2, max_length=2000)
     evidence: dict[str, Any] = Field(default_factory=dict)
     requires_human_review: bool = True
+    review_status: IntegrityReviewStatus = IntegrityReviewStatus.PENDING
+    reviewed_by: str | None = Field(default=None, max_length=256)
+    review_note: str | None = Field(default=None, max_length=5000)
 
 
 class IntegritySignalRequest(StrictModel):
@@ -246,6 +255,15 @@ class IntegritySignalRequest(StrictModel):
     confidence: float = Field(ge=0.0, le=1.0)
     note: str = Field(min_length=2, max_length=2000)
     evidence: dict[str, Any] = Field(default_factory=dict)
+
+
+class IntegrityReviewSubmission(StrictModel):
+    note: str = Field(min_length=2, max_length=5000)
+
+
+class IntegrityReviewRequest(StrictModel):
+    reviewer_id: str = Field(min_length=1, max_length=256)
+    note: str = Field(min_length=2, max_length=5000)
 
 
 class ToolInvocation(StrictModel):
