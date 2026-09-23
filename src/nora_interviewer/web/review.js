@@ -1,7 +1,10 @@
 const $ = (id) => document.getElementById(id);
 
-async function jsonFetch(url) {
-  const response = await fetch(url);
+async function jsonFetch(url, options = {}) {
+  const response = await fetch(url, {
+    headers: {"Content-Type": "application/json", ...(options.headers || {})},
+    ...options,
+  });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.detail || `HTTP ${response.status}`);
@@ -46,6 +49,26 @@ function renderQueue(items) {
   }
 }
 
+async function reviewAppeal(sessionId, appealId) {
+  const note = window.prompt("Reviewer note:");
+  if (!note || note.trim().length < 2) return;
+
+  try {
+    await jsonFetch(
+      `/v1/sessions/${sessionId}/appeals/${appealId}/review`,
+      {
+        method: "POST",
+        body: JSON.stringify({note: note.trim()}),
+      },
+    );
+    await loadQueue();
+    const active = document.querySelector(`[data-session-id="${sessionId}"]`);
+    await loadReport(sessionId, active);
+  } catch (error) {
+    window.alert(error.message);
+  }
+}
+
 function renderReport(report) {
   $("emptyState").classList.add("hidden");
   $("report").classList.remove("hidden");
@@ -79,6 +102,56 @@ function renderReport(report) {
       <div class="source-list">${item.source_types.map(source => `<span>${source}</span>`).join("")}</div>
     `;
     competencies.appendChild(card);
+  }
+
+  const appeals = $("appeals");
+  appeals.innerHTML = "";
+  if (!report.appeals.length) {
+    appeals.innerHTML = '<div class="queue-empty">No candidate appeals.</div>';
+  } else {
+    for (const appeal of report.appeals) {
+      const card = document.createElement("article");
+      card.className = "appeal-card";
+      const reviewed = appeal.status === "reviewed";
+      card.innerHTML = `
+        <div class="appeal-head">
+          <strong>${appeal.status}</strong>
+          <span>${appeal.turn_ids.length} referenced turn(s)</span>
+        </div>
+        <p>${appeal.message}</p>
+        ${reviewed
+          ? `<div class="review-resolution"><small>Reviewed by ${appeal.reviewed_by || "reviewer"}</small><p>${appeal.review_note || ""}</p></div>`
+          : '<button type="button" class="resolve-appeal">Review appeal</button>'
+        }
+      `;
+      if (!reviewed) {
+        card.querySelector(".resolve-appeal").addEventListener(
+          "click",
+          () => reviewAppeal(report.session_id, appeal.id),
+        );
+      }
+      appeals.appendChild(card);
+    }
+  }
+
+  const integrity = $("integrity");
+  integrity.innerHTML = "";
+  if (!report.integrity.length) {
+    integrity.innerHTML = '<div class="queue-empty">No integrity signals.</div>';
+  } else {
+    for (const signal of report.integrity) {
+      const card = document.createElement("article");
+      card.className = "integrity-card";
+      card.innerHTML = `
+        <div class="integrity-head">
+          <strong>${signal.kind.replaceAll("_", " ")}</strong>
+          <span>${Math.round(signal.confidence * 100)}% signal confidence</span>
+        </div>
+        <p>${signal.note}</p>
+        <small>Human review required · not proof of misconduct</small>
+      `;
+      integrity.appendChild(card);
+    }
   }
 
   const reasons = $("reasons");
