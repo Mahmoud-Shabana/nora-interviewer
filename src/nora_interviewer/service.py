@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 from .audit import append_event
 from .evidence import EvidenceGraph
+from .feedback import CandidateFeedbackReport, build_candidate_feedback
 from .models import (
     CandidateAppeal,
     CandidateAppealRequest,
@@ -275,6 +276,10 @@ class InterviewService:
         )
         await self.store.put_session(session)
         return session.evidence_graph[observation.competency_id]
+
+    async def candidate_feedback(self, session_id: str) -> CandidateFeedbackReport:
+        session, job = await self._get(session_id)
+        return build_candidate_feedback(session, job)
 
     async def events(self, session_id: str) -> list[InterviewEvent]:
         session, _ = await self._get(session_id)
