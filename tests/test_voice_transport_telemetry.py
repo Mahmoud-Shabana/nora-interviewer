@@ -124,19 +124,16 @@ def test_voice_transport_telemetry_is_audited_and_exported():
 
 
 def test_voice_transport_fallback_validation_rejects_same_transport():
+    import pytest
     from pydantic import ValidationError
 
-    try:
+    with pytest.raises(
+        ValidationError,
+        match="must change transport",
+    ):
         VoiceTransportFallbackEvent(
             direction="tts",
             from_transport="server",
             to_transport="server",
             reason="invalid",
         )
-    except ValidationError:
-        return
-
-    # The model permits literal values independently; semantic continuity is
-    # enforced by VoxRubric rather than silently changing audit history.
-    # This assertion documents that boundary explicitly.
-    assert True
