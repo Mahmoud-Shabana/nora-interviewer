@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from .base import StreamingSpeechProvider
 from ..voice_stream import (
     AudioStreamConfig,
+    StreamingSpeechProvider,
     StreamingSpeechSession,
 )
 
