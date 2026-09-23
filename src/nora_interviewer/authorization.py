@@ -19,6 +19,7 @@ class Permission(str, Enum):
     CREATE_JOB = "create_job"
     CREATE_SESSION = "create_session"
     RUN_INTERVIEW = "run_interview"
+    CANCEL_SESSION = "cancel_session"
     CANDIDATE_CONTROL = "candidate_control"
     CORRECT_TRANSCRIPT = "correct_transcript"
     SUBMIT_APPEAL = "submit_appeal"
@@ -55,6 +56,7 @@ class Principal(StrictModel):
 _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
     ActorRole.CANDIDATE: {
         Permission.RUN_INTERVIEW,
+        Permission.CANCEL_SESSION,
         Permission.CANDIDATE_CONTROL,
         Permission.CORRECT_TRANSCRIPT,
         Permission.SUBMIT_APPEAL,
@@ -66,6 +68,7 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
     ActorRole.RECRUITER: {
         Permission.CREATE_JOB,
         Permission.CREATE_SESSION,
+        Permission.CANCEL_SESSION,
         Permission.OPEN_TOOL,
         Permission.READ_SESSION,
         Permission.READ_EVENTS,
