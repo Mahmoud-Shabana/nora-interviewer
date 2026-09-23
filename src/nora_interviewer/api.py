@@ -183,7 +183,13 @@ async def candidate_control(
 async def open_coding_challenge(
     session_id: str,
     request: CodingChallengeRequest,
+    principal: Principal = Depends(current_principal),
 ) -> ToolInvocation:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.OPEN_TOOL,
+    )
     return await service.open_coding_challenge(session_id, request)
 
 
@@ -195,7 +201,13 @@ async def open_coding_challenge(
 async def open_tool(
     session_id: str,
     invocation: ToolInvocation,
+    principal: Principal = Depends(current_principal),
 ) -> ToolInvocation:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.OPEN_TOOL,
+    )
     return await service.open_tool(session_id, invocation)
 
 
@@ -207,7 +219,13 @@ async def submit_tool(
     session_id: str,
     tool_id: str,
     request: ToolSubmissionRequest,
+    principal: Principal = Depends(current_principal),
 ) -> ToolStep:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.SUBMIT_TOOL,
+    )
     return await service.submit_tool(session_id, tool_id, request)
 
 
@@ -227,7 +245,13 @@ async def get_session(session_id: str) -> InterviewSession:
 async def correct_transcript(
     session_id: str,
     request: TranscriptCorrectionRequest,
+    principal: Principal = Depends(current_principal),
 ) -> TranscriptRevision:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.CORRECT_TRANSCRIPT,
+    )
     return await service.correct_transcript(session_id, request)
 
 
@@ -239,7 +263,13 @@ async def correct_transcript(
 async def submit_appeal(
     session_id: str,
     request: CandidateAppealRequest,
+    principal: Principal = Depends(current_principal),
 ) -> CandidateAppeal:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.SUBMIT_APPEAL,
+    )
     return await service.submit_appeal(session_id, request)
 
 
@@ -251,7 +281,13 @@ async def submit_appeal(
 async def submit_integrity_signal(
     session_id: str,
     request: IntegritySignalRequest,
+    principal: Principal = Depends(current_principal),
 ) -> IntegritySignal:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.WRITE_INTEGRITY,
+    )
     return await service.submit_integrity_signal(session_id, request)
 
 
@@ -262,7 +298,13 @@ async def submit_integrity_signal(
 async def observe_evidence(
     session_id: str,
     observation: EvidenceObservation,
+    principal: Principal = Depends(current_principal),
 ) -> CompetencyEvidence:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.WRITE_EVIDENCE,
+    )
     return await service.observe_evidence(session_id, observation)
 
 
