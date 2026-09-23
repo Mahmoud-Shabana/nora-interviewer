@@ -23,6 +23,7 @@ from .providers.websocket_speech import JsonWebSocketSpeechProvider
 from .providers.websocket_tts import JsonWebSocketTtsProvider
 from .postgres_store import PostgresStore
 from .provider_health import ProviderHealthRegistry
+from .slo import OperationalSloPolicy
 from .sqlite_store import SqliteStore
 from .storage import InMemoryStore
 from .vad import VadConfig
@@ -565,6 +566,40 @@ def build_voice_provider_health_registry() -> ProviderHealthRegistry:
     except ValueError as exc:
         raise RuntimeError(
             f"Invalid voice provider health configuration: {exc}"
+        ) from exc
+
+
+def build_operational_slo_policy() -> OperationalSloPolicy:
+    try:
+        return OperationalSloPolicy(
+            max_http_5xx_ratio=float(
+                os.getenv(
+                    "NORA_SLO_MAX_HTTP_5XX_RATIO",
+                    "0.05",
+                )
+            ),
+            min_http_requests_for_error_ratio=int(
+                os.getenv(
+                    "NORA_SLO_MIN_HTTP_REQUESTS",
+                    "20",
+                )
+            ),
+            max_unassigned_review_required=int(
+                os.getenv(
+                    "NORA_SLO_MAX_UNASSIGNED_REVIEWS",
+                    "20",
+                )
+            ),
+            max_failed_evidence_runs=int(
+                os.getenv(
+                    "NORA_SLO_MAX_FAILED_EVIDENCE_RUNS",
+                    "5",
+                )
+            ),
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Invalid operational SLO configuration: {exc}"
         ) from exc
 
 
