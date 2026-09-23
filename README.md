@@ -76,6 +76,8 @@ It separates:
 | Production OIDC/JWT authentication | 🧭 Planned |
 | PostgreSQL multi-instance persistence | 🧭 Planned |
 | Dry-run-first session retention | ✅ Implemented |
+| Tamper-evident audit hash chain | ✅ Implemented |
+| Protected system capabilities | ✅ Implemented |
 
 ---
 
@@ -427,6 +429,22 @@ There is intentionally no automatic “candidate cheated → reject” field in 
 
 ---
 
+# 🔗 Tamper-evident audit chain
+
+Every newly sealed interview event is linked with SHA-256:
+
+```text
+event 1 -> H1
+event 2(prev=H1) -> H2
+event 3(prev=H2) -> H3
+```
+
+Replay verifies the chain before reconstructing state. Nora also exports canonical audit events so VoxRubric can recompute the chain independently.
+
+See [Tamper-Evident Audit Chain](docs/AUDIT_CHAIN.md).
+
+---
+
 # 🗂️ Event log & replay
 
 Material actions are recorded as ordered events.
@@ -679,6 +697,18 @@ See [Data Retention](docs/RETENTION.md).
 
 ---
 
+# 🔎 System capabilities
+
+Protected operators can inspect active non-secret system configuration:
+
+```text
+GET /v1/system/capabilities
+```
+
+The response reports implementation types and feature availability without exposing credentials or API keys.
+
+---
+
 # 🚀 Quick start
 
 ## Requirements
@@ -899,6 +929,8 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Authorization Model](docs/AUTHORIZATION.md)
 - [Storage Backends](docs/STORAGE.md)
 - [Data Retention](docs/RETENTION.md)
+- [Tamper-Evident Audit Chain](docs/AUDIT_CHAIN.md)
+- [Changelog](CHANGELOG.md)
 - [VoxRubric](https://github.com/Mahmoud-Shabana/voxrubric)
 
 ---
@@ -941,6 +973,10 @@ Nora is intentionally conservative around high-stakes behavior.
 - [x] Session creation/completion timestamps
 - [x] Backend-neutral retention manager
 - [x] Service-only dry-run-first retention API
+- [x] Tamper-evident SHA-256 event chain
+- [x] Replay-time audit-chain verification
+- [x] Independently verifiable VoxRubric audit export
+- [x] Protected system-capabilities endpoint
 
 ## 🚧 In progress
 
