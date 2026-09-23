@@ -18,6 +18,7 @@ from .config import (
     build_principal_resolver,
     build_store,
     build_streaming_speech_provider,
+    build_streaming_tts_provider,
 )
 from .counterfactual import CounterfactualReplayReport
 from .feedback import CandidateFeedbackReport
@@ -59,6 +60,7 @@ from .review import (
 from .review_bundle import ReviewBundle, build_review_bundle
 from .review_service import ReviewService
 from .providers.streaming_speech import StreamingSpeechUnavailableError
+from .providers.streaming_tts import StreamingTtsUnavailableError
 from .retention import RetentionManager, RetentionReport, RetentionRequest
 from .service import InterviewService
 from .voice import (
@@ -79,6 +81,13 @@ from .voice_stream import (
     AudioStreamOpenRequest,
     AudioStreamReconnectRequest,
 )
+from .voice_output import (
+    TtsStreamConflictError,
+    TtsStreamError,
+    TtsStreamNotFoundError,
+    TtsStreamOpenRequest,
+)
+from .voice_output_bridge import VoiceOutputBridge
 from .voice_stream_bridge import (
     StreamingFinalTranscript,
     StreamingPartialTranscript,
@@ -100,10 +109,16 @@ principal_resolver = build_principal_resolver()
 retention = RetentionManager(store)
 review_service = ReviewService(store=store)
 streaming_speech_provider = build_streaming_speech_provider()
+streaming_tts_provider = build_streaming_tts_provider()
 audio_stream_manager = AudioStreamManager()
 audio_bridge = VoiceStreamBridge(
     manager=audio_stream_manager,
     provider=streaming_speech_provider,
+    voice=voice,
+)
+tts_bridge = VoiceOutputBridge(
+    store=store,
+    provider=streaming_tts_provider,
     voice=voice,
 )
 AUDIO_RECONNECT_GRACE_SECONDS = 30.0
@@ -176,6 +191,7 @@ async def lifespan(_: FastAPI):
         for task in list(_audio_expiry_tasks.values()):
             task.cancel()
         await audio_bridge.close_all()
+        await tts_bridge.close_all()
         await store.close()
 
 
@@ -237,6 +253,7 @@ async def system_capabilities(
         principal_resolver=principal_resolver,
         service=service,
         streaming_speech_provider=streaming_speech_provider,
+        streaming_tts_provider=streaming_tts_provider,
     )
 
 
@@ -1267,6 +1284,10 @@ async def audio_socket(
                     session_id=session_id,
                     locale=request.locale,
                     config=request.config,
+                )
+                await tts_bridge.cancel_active(
+                    session_id=session_id,
+                    reason="barge_in",
                 )
                 active_stream_id = (
                     opened.state.stream_id
