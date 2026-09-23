@@ -90,7 +90,7 @@ class EvidenceGraph:
             state=observation.state,
             confidence=observation.confidence,
             note=observation.note,
-            source="evaluator",
+            source=observation.source,
         )
         node.evidence.append(item)
 
