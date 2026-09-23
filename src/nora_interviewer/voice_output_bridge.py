@@ -108,19 +108,22 @@ class VoiceOutputBridge:
                     exc,
                     ProviderCircuitOpenError,
                 ):
-                    await self.voice.provider_failed(
-                        session_id,
-                        direction="tts",
-                        provider_id=str(
-                            getattr(
-                                self.provider,
-                                "provider_id",
-                                type(self.provider).__name__,
-                            )
-                        ),
-                        error_type=type(exc).__name__,
-                        message=str(exc),
-                    )
+                    try:
+                        await self.voice.provider_failed(
+                            session_id,
+                            direction="tts",
+                            provider_id=str(
+                                getattr(
+                                    self.provider,
+                                    "provider_id",
+                                    type(self.provider).__name__,
+                                )
+                            ),
+                            error_type=type(exc).__name__,
+                            message=str(exc),
+                        )
+                    except Exception:
+                        pass
                 raise
 
             await self.voice.tts_started(
