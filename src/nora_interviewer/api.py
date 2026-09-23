@@ -37,6 +37,7 @@ from .models import (
     VoxRubricTrace,
 )
 from .replay import ReplayState
+from .retention import RetentionManager, RetentionReport, RetentionRequest
 from .service import InterviewService
 from .voice import (
     RealtimeVoiceCoordinator,
@@ -55,6 +56,7 @@ service = InterviewService(
 )
 voice = RealtimeVoiceCoordinator(service=service, store=store)
 principal_resolver = build_principal_resolver()
+retention = RetentionManager(store)
 
 
 def current_principal(
@@ -105,6 +107,21 @@ async def home() -> HTMLResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post(
+    "/v1/system/retention/run",
+    response_model=RetentionReport,
+)
+async def run_retention(
+    request: RetentionRequest,
+    principal: Principal = Depends(current_principal),
+) -> RetentionReport:
+    require_global_permission(
+        principal,
+        Permission.RUN_RETENTION,
+    )
+    return await retention.run(request)
 
 
 @app.post("/v1/jobs", response_model=JobSpec, status_code=201)
