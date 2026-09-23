@@ -43,6 +43,8 @@ class Permission(str, Enum):
     EXPORT_REVIEW_BUNDLE = "export_review_bundle"
     REEVALUATE_EVIDENCE = "reevaluate_evidence"
     DRAFT_RUBRIC = "draft_rubric"
+    READ_RUBRIC_DRAFT = "read_rubric_draft"
+    APPROVE_RUBRIC = "approve_rubric"
 
 
 class Principal(StrictModel):
@@ -85,6 +87,8 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.EXPORT_REVIEW_BUNDLE,
         Permission.REEVALUATE_EVIDENCE,
         Permission.DRAFT_RUBRIC,
+        Permission.READ_RUBRIC_DRAFT,
+        Permission.APPROVE_RUBRIC,
     },
     ActorRole.REVIEWER: {
         Permission.READ_SESSION,
