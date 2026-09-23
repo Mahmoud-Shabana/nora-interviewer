@@ -30,6 +30,8 @@ class SystemCapabilities(StrictModel):
     storage_readiness: bool = True
     jwt_jwks_auth: bool = False
     evidence_judge_ensemble: bool = False
+    streaming_stt_enabled: bool = False
+    streaming_stt_backend: str = "DisabledStreamingSpeechProvider"
     voxrubric_export: bool = True
 
 
@@ -39,9 +41,15 @@ def describe_capabilities(
     store: Store,
     principal_resolver,
     service: InterviewService,
+    streaming_speech_provider=None,
 ) -> SystemCapabilities:
     judge = service.evidence_judge
     judge_backend = type(judge).__name__
+    speech_backend = (
+        type(streaming_speech_provider).__name__
+        if streaming_speech_provider is not None
+        else "DisabledStreamingSpeechProvider"
+    )
 
     return SystemCapabilities(
         api_version=api_version,
@@ -59,6 +67,10 @@ def describe_capabilities(
         evidence_judge_ensemble=(
             judge_backend == "EvidenceJudgeEnsemble"
         ),
+        streaming_stt_enabled=(
+            speech_backend != "DisabledStreamingSpeechProvider"
+        ),
+        streaming_stt_backend=speech_backend,
         sandbox_mode=os.getenv(
             "NORA_SANDBOX_MODE",
             "disabled",
