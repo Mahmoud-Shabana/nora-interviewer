@@ -31,6 +31,7 @@ class FakeSpeechSession:
         self.audio = []
         self.closed = False
         self.cancelled = False
+        self.commit_count = 0
 
     async def push_audio(self, audio: bytes) -> None:
         self.audio.append(audio)
@@ -38,6 +39,9 @@ class FakeSpeechSession:
     async def events(self):
         for event in self._events:
             yield event
+
+    async def commit(self) -> None:
+        self.commit_count += 1
 
     async def close(self) -> None:
         self.closed = True
@@ -238,5 +242,65 @@ def test_duplicate_chunk_is_not_pushed_twice_to_provider():
         assert first.duplicate is False
         assert duplicate.duplicate is True
         assert provider.sessions[0][2].audio == [b"one"]
+
+    run(scenario())
+
+
+
+def test_bridge_commit_is_idempotent_for_reconnect_retries():
+    async def scenario():
+        store = InMemoryStore()
+        service = InterviewService(
+            store,
+            RuleBasedBrain(),
+        )
+        voice = RealtimeVoiceCoordinator(
+            service=service,
+            store=store,
+        )
+        provider = FakeSpeechProvider([])
+        manager = AudioStreamManager()
+        bridge = VoiceStreamBridge(
+            manager=manager,
+            provider=provider,
+            voice=voice,
+        )
+
+        job = await service.create_job(JobSpec(
+            id="commit-job",
+            title="Engineer",
+            description="Build reliable systems",
+            competencies=[
+                Competency(
+                    id="debugging",
+                    description="production debugging",
+                )
+            ],
+        ))
+        session = await service.create_session(
+            CreateSession(
+                job_id=job.id,
+                candidate_ref="candidate",
+                consent_to_ai_interview=True,
+                consent_to_transcript=True,
+            )
+        )
+        await service.start(session.id)
+
+        opened = await bridge.open(
+            session_id=session.id,
+            locale="en",
+            config=AudioStreamConfig(),
+        )
+        stream_id = opened.state.stream_id
+
+        await bridge.commit(
+            stream_id=stream_id,
+        )
+        await bridge.commit(
+            stream_id=stream_id,
+        )
+
+        assert provider.sessions[0][2].commit_count == 1
 
     run(scenario())
