@@ -12,6 +12,8 @@ from .models import (
     CreateSession,
     EvidenceObservation,
     EventType,
+    IntegritySignal,
+    IntegritySignalRequest,
     InterviewEvent,
     InterviewSession,
     JobSpec,
@@ -55,12 +57,17 @@ class InterviewService:
             job_id=job.id,
             candidate_ref=request.candidate_ref,
             locale=request.locale,
+            integrity_level=request.integrity_level,
         )
         EvidenceGraph.initialize(session, job)
         append_event(
             session,
             EventType.SESSION_CREATED,
-            payload={"job_id": job.id, "locale": session.locale},
+            payload={
+                "job_id": job.id,
+                "locale": session.locale,
+                "integrity_level": session.integrity_level.value,
+            },
         )
         await self.store.put_session(session)
         return session
@@ -138,9 +145,6 @@ class InterviewService:
         adaptive_decision = await self.brain.after_answer(session, job)
         latency_ms = max(0, round((perf_counter() - started) * 1000))
 
-        # Preserve a genuine follow-up when the brain wants to probe the latest
-        # answer. Otherwise, schedule a standardized anchor if the target share
-        # has fallen below the job's configured anchor ratio.
         if adaptive_decision.parent_turn_id:
             decision = adaptive_decision
         else:
@@ -219,6 +223,33 @@ class InterviewService:
         await self.store.put_session(session)
         return appeal
 
+    async def submit_integrity_signal(
+        self,
+        session_id: str,
+        request: IntegritySignalRequest,
+    ) -> IntegritySignal:
+        session, _ = await self._get(session_id)
+        signal = IntegritySignal(
+            kind=request.kind,
+            confidence=request.confidence,
+            note=request.note,
+            evidence=request.evidence,
+            requires_human_review=True,
+        )
+        session.integrity_signals.append(signal)
+        append_event(
+            session,
+            EventType.INTEGRITY_SIGNAL,
+            payload={
+                "signal_id": signal.id,
+                "kind": signal.kind,
+                "confidence": signal.confidence,
+                "requires_human_review": True,
+            },
+        )
+        await self.store.put_session(session)
+        return signal
+
     async def observe_evidence(
         self,
         session_id: str,
@@ -295,6 +326,11 @@ class InterviewService:
                     for revision in session.transcript_revisions
                 ],
                 "appeals": [appeal.model_dump(mode="json") for appeal in session.appeals],
+                "integrity_level": session.integrity_level.value,
+                "integrity_signals": [
+                    signal.model_dump(mode="json")
+                    for signal in session.integrity_signals
+                ],
                 "event_count": len(session.events),
             },
         )
