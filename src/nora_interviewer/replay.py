@@ -18,6 +18,7 @@ class ReplayState(StrictModel):
     opened_tool_ids: list[str] = Field(default_factory=list)
     submitted_tool_ids: list[str] = Field(default_factory=list)
     evaluated_tool_ids: list[str] = Field(default_factory=list)
+    cancelled_tool_ids: list[str] = Field(default_factory=list)
     event_count: int = 0
     audit_chain_verified: bool | None = None
     audit_head_hash: str | None = None
@@ -76,7 +77,15 @@ def replay_events(session_id: str, events: list[InterviewEvent]) -> ReplayState:
             tool_id = str(event.payload.get("tool_id", ""))
             if tool_id:
                 state.evaluated_tool_ids.append(tool_id)
+        elif event.type is EventType.TOOL_CANCELLED:
+            tool_id = str(event.payload.get("tool_id", ""))
+            if tool_id:
+                state.cancelled_tool_ids.append(tool_id)
         elif event.type is EventType.SESSION_COMPLETED:
             state.status = SessionStatus.COMPLETED
+            state.paused = False
+        elif event.type is EventType.SESSION_CANCELLED:
+            state.status = SessionStatus.CANCELLED
+            state.paused = False
 
     return state
