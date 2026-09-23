@@ -13,6 +13,10 @@ from .providers.completion import OpenAICompatibleChatProvider
 from .providers.fallback import FallbackBrain
 from .providers.llm_brain import LLMInterviewBrain
 from .providers.rule_based import RuleBasedBrain
+from .rubric_drafting import (
+    DisabledRubricDrafter,
+    LLMRubricDrafter,
+)
 from .providers.streaming_speech import DisabledStreamingSpeechProvider
 from .providers.streaming_tts import DisabledStreamingTtsProvider
 from .providers.websocket_speech import JsonWebSocketSpeechProvider
@@ -151,6 +155,52 @@ def build_evidence_judge():
 
     raise RuntimeError(
         f"Unsupported NORA_EVIDENCE_JUDGE_MODE: {mode}"
+    )
+
+
+def build_rubric_drafter():
+    """Build the optional recruiter-facing rubric drafting assistant."""
+
+    mode = os.getenv(
+        "NORA_RUBRIC_DRAFTER_MODE",
+        "disabled",
+    ).strip().lower()
+
+    if mode == "disabled":
+        return DisabledRubricDrafter()
+
+    if mode == "openai-compatible":
+        base_url = os.getenv(
+            "NORA_RUBRIC_DRAFTER_BASE_URL",
+            "",
+        ).strip()
+        model = os.getenv(
+            "NORA_RUBRIC_DRAFTER_MODEL",
+            "",
+        ).strip()
+        api_key = os.getenv(
+            "NORA_RUBRIC_DRAFTER_API_KEY"
+        )
+
+        if not base_url or not model:
+            raise RuntimeError(
+                "NORA_RUBRIC_DRAFTER_BASE_URL and "
+                "NORA_RUBRIC_DRAFTER_MODEL are required when "
+                "NORA_RUBRIC_DRAFTER_MODE=openai-compatible"
+            )
+
+        provider = OpenAICompatibleChatProvider(
+            base_url=base_url,
+            model=model,
+            api_key=api_key,
+        )
+        return LLMRubricDrafter(
+            provider,
+            drafter_id=f"openai-compatible:{model}",
+        )
+
+    raise RuntimeError(
+        f"Unsupported NORA_RUBRIC_DRAFTER_MODE: {mode}"
     )
 
 
