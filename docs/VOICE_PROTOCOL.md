@@ -256,3 +256,37 @@ export NORA_STREAMING_TTS_VOICE=default
 ```
 
 Plain `ws://` endpoints are rejected by configuration unless explicitly enabled for trusted local development.
+
+
+## Browser server-STT reconnect
+
+The built-in browser microphone client keeps a bounded copy of audio frames that have been sent but not yet acknowledged.
+
+On a transient WebSocket disconnect:
+
+1. microphone capture may continue into the bounded local frame queue;
+2. the client reconnects to `/v1/ws/audio/{session_id}`;
+3. it presents the stream ID, reconnect token, voice generation, and its **last acknowledged** audio cursor;
+4. Nora returns the authoritative server `next_sequence`;
+5. the client drops in-flight frames already accepted by the server;
+6. only uncertain/unaccepted frames are replayed;
+7. normal chunk acknowledgements resume.
+
+A client reconnect cursor may be behind the server cursor, but it may never be ahead of it. This handles the important case where the server accepted a frame but the network dropped before its ACK reached the browser.
+
+### Idempotent commit
+
+`commit` is idempotent per provider stream.
+
+A browser that disconnects while finalizing an utterance may reconnect and retry `commit` without invoking the upstream provider commit twice.
+
+### Bounded recovery
+
+The browser limits both:
+
+- audio frames waiting to be sent; and
+- reconnect attempts.
+
+If recovery cannot complete within those bounds, the server-STT client fails closed and the interview room may switch to browser speech recognition when available.
+
+The server keeps disconnected streams alive only for the configured reconnect grace period before cancelling the upstream provider session.
