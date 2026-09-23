@@ -43,6 +43,7 @@ from .providers.base import InterviewBrain
 from .replay import ReplayState, replay_events
 from .sandbox import default_sandbox_runner
 from .storage import InMemoryStore
+from .tool_templates import ToolTemplateRegistry, default_tool_template_registry
 from .tools import ToolRegistry, default_tool_registry
 
 
@@ -65,9 +66,17 @@ class InterviewService:
                 runner=default_sandbox_runner(),
             )
         )
+        self.tool_template_registry: ToolTemplateRegistry = (
+            default_tool_template_registry(self.coding_challenges)
+        )
         self.counterfactual_replayer = CounterfactualReplayer()
 
     async def create_job(self, job: JobSpec) -> JobSpec:
+        for item in job.tool_templates:
+            try:
+                self.tool_template_registry.get(item.template_id)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
         await self.store.put_job(job)
         return job
 
@@ -117,9 +126,20 @@ class InterviewService:
             latency_ms = max(0, round((perf_counter() - started) * 1000))
 
         turn = self._apply_decision(session, decision, latency_ms=latency_ms)
+        tool_invocation = await self._open_requested_tool(
+            session,
+            job,
+            decision,
+            opened_from_turn_id=turn.id,
+        )
         session.status = SessionStatus.RUNNING
         await self.store.put_session(session)
-        return SessionStep(session_id=session.id, status=session.status, interviewer_turn=turn)
+        return SessionStep(
+            session_id=session.id,
+            status=session.status,
+            interviewer_turn=turn,
+            tool_invocation=tool_invocation,
+        )
 
     async def answer(self, session_id: str, text: str) -> SessionStep:
         session, job = await self._get(session_id)
@@ -189,12 +209,24 @@ class InterviewService:
         if decision.parent_turn_id and decision.competency_tags:
             key = decision.competency_tags[0]
             session.followups_by_competency[key] = session.followups_by_competency.get(key, 0) + 1
+        tool_invocation = await self._open_requested_tool(
+            session,
+            job,
+            decision,
+            opened_from_turn_id=interviewer.id,
+        )
+
         if decision.completes_interview:
             session.status = SessionStatus.COMPLETED
             append_event(session, EventType.SESSION_COMPLETED)
 
         await self.store.put_session(session)
-        return SessionStep(session_id=session.id, status=session.status, interviewer_turn=interviewer)
+        return SessionStep(
+            session_id=session.id,
+            status=session.status,
+            interviewer_turn=interviewer,
+            tool_invocation=tool_invocation,
+        )
 
     async def candidate_control(
         self,
@@ -249,6 +281,52 @@ class InterviewService:
 
         await self.store.put_session(session)
         return result
+
+    async def _open_requested_tool(
+        self,
+        session: InterviewSession,
+        job: JobSpec,
+        decision,
+        *,
+        opened_from_turn_id: str,
+    ) -> ToolInvocation | None:
+        request = decision.tool_request
+        if request is None:
+            return None
+
+        if len(session.tools) >= job.max_tools:
+            raise HTTPException(409, "Job tool budget has been exhausted")
+
+        policy = {item.template_id: item for item in job.tool_templates}
+        allowed = policy.get(request.template_id)
+        if allowed is None:
+            raise HTTPException(
+                400,
+                f"Brain requested tool template not allowed by job: {request.template_id}",
+            )
+
+        if allowed.competency_ids:
+            outside = sorted(
+                set(decision.competency_tags) - set(allowed.competency_ids)
+            )
+            if outside:
+                raise HTTPException(
+                    400,
+                    f"Tool request uses competencies outside its job policy: {outside}",
+                )
+
+        try:
+            invocation = self.tool_template_registry.instantiate(
+                request.template_id,
+                session=session,
+                job=job,
+                competency_tags=decision.competency_tags,
+                opened_from_turn_id=opened_from_turn_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+        return await self.open_tool(session.id, invocation)
 
     async def open_coding_challenge(
         self,
