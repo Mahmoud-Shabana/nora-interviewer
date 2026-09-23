@@ -39,6 +39,7 @@ class Permission(str, Enum):
     READ_RECRUITER_REPORT = "read_recruiter_report"
     REVIEW_APPEAL = "review_appeal"
     REVIEW_INTEGRITY = "review_integrity"
+    EXPORT_REVIEW_BUNDLE = "export_review_bundle"
 
 
 class Principal(StrictModel):
@@ -76,6 +77,7 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.READ_RECRUITER_REPORT,
         Permission.REVIEW_APPEAL,
         Permission.REVIEW_INTEGRITY,
+        Permission.EXPORT_REVIEW_BUNDLE,
     },
     ActorRole.REVIEWER: {
         Permission.READ_SESSION,
@@ -90,6 +92,7 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.READ_RECRUITER_REPORT,
         Permission.REVIEW_APPEAL,
         Permission.REVIEW_INTEGRITY,
+        Permission.EXPORT_REVIEW_BUNDLE,
     },
     ActorRole.SERVICE: set(Permission),
 }
