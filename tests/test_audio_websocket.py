@@ -327,3 +327,107 @@ def test_audio_socket_commits_provider_stream(monkeypatch):
                 },
             })
             assert socket.receive_json()["type"] == "stream_closed"
+
+
+
+def test_audio_socket_reconnect_accepts_last_acknowledged_cursor(monkeypatch):
+    manager, provider, _ = install_bridge(
+        monkeypatch,
+        emit_transcript=False,
+    )
+
+    with TestClient(api.app) as client:
+        session_id = setup_session(client)
+
+        with client.websocket_connect(
+            f"/v1/ws/audio/{session_id}"
+        ) as first:
+            first.send_json({
+                "type": "open",
+                "data": {"locale": "en"},
+            })
+            opened = first.receive_json()
+            stream_id = opened["data"]["state"]["stream_id"]
+            token = opened["data"]["reconnect_token"]
+            generation = opened["data"]["state"]["generation"]
+
+            first.send_json({
+                "type": "chunk",
+                "data": AudioChunkMessage.from_bytes(
+                    sequence=0,
+                    generation=generation,
+                    audio=b"accepted-before-disconnect",
+                ).model_dump(mode="json"),
+            })
+
+            # Simulate a connection loss before the client processes the ACK.
+            # The server has already accepted sequence 0.
+            ack = first.receive_json()
+            assert ack["type"] == "chunk_ack"
+            assert ack["data"]["next_sequence"] == 1
+
+        with client.websocket_connect(
+            f"/v1/ws/audio/{session_id}"
+        ) as second:
+            second.send_json({
+                "type": "reconnect",
+                "data": {
+                    "stream_id": stream_id,
+                    "reconnect_token": token,
+                    "generation": generation,
+                    "next_sequence": 0,
+                },
+            })
+            reconnected = second.receive_json()
+            assert reconnected["type"] == "stream_reconnected"
+            assert reconnected["data"]["next_sequence"] == 1
+
+            # Replaying sequence 0 is harmless and never reaches the provider
+            # twice because the transport manager treats it as a duplicate.
+            second.send_json({
+                "type": "chunk",
+                "data": AudioChunkMessage.from_bytes(
+                    sequence=0,
+                    generation=generation,
+                    audio=b"replayed",
+                ).model_dump(mode="json"),
+            })
+            duplicate = second.receive_json()
+            assert duplicate["type"] == "chunk_ack"
+            assert duplicate["data"]["duplicate"] is True
+            assert duplicate["data"]["next_sequence"] == 1
+
+            second.send_json({
+                "type": "chunk",
+                "data": AudioChunkMessage.from_bytes(
+                    sequence=1,
+                    generation=generation,
+                    audio=b"next-frame",
+                ).model_dump(mode="json"),
+            })
+            next_ack = second.receive_json()
+            assert next_ack["type"] == "chunk_ack"
+            assert next_ack["data"]["next_sequence"] == 2
+
+            second.send_json({
+                "type": "commit",
+                "data": {},
+            })
+            assert second.receive_json()["type"] == "stream_committed"
+
+            # A commit retry after reconnect is safe.
+            second.send_json({
+                "type": "commit",
+                "data": {},
+            })
+            assert second.receive_json()["type"] == "stream_committed"
+
+            second.send_json({
+                "type": "close",
+                "data": {"stream_id": stream_id},
+            })
+            assert second.receive_json()["type"] == "stream_closed"
+
+        assert provider.sessions[0].pushed == 2
+        assert provider.sessions[0].committed is True
+        assert manager.state(stream_id).next_sequence == 2
