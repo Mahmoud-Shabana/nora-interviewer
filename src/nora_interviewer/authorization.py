@@ -34,6 +34,7 @@ class Permission(str, Enum):
     EXPORT_TRACE = "export_trace"
     USE_VOICE = "use_voice"
     RUN_RETENTION = "run_retention"
+    READ_SYSTEM = "read_system"
 
 
 class Principal(StrictModel):
@@ -66,6 +67,7 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.READ_REPLAY,
         Permission.RUN_DECISION_REPLAY,
         Permission.EXPORT_TRACE,
+        Permission.READ_SYSTEM,
     },
     ActorRole.REVIEWER: {
         Permission.READ_SESSION,
@@ -75,6 +77,7 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.WRITE_EVIDENCE,
         Permission.WRITE_INTEGRITY,
         Permission.EXPORT_TRACE,
+        Permission.READ_SYSTEM,
     },
     ActorRole.SERVICE: set(Permission),
 }
