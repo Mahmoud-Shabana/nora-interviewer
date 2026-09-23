@@ -39,6 +39,8 @@ class Store(Protocol):
         session_id: str,
     ) -> bool: ...
 
+    async def close(self) -> None: ...
+
 
 class InMemoryStore:
     """Process-local store with optimistic session versioning."""
@@ -110,3 +112,10 @@ class InMemoryStore:
                 )
                 is not None
             )
+
+    async def close(self) -> None:
+        return None
+
+
+async def _noop_close() -> None:
+    return None
