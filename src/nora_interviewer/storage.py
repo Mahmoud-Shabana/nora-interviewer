@@ -26,6 +26,15 @@ class Store(Protocol):
         session_id: str,
     ) -> InterviewSession | None: ...
 
+    async def list_sessions(
+        self,
+    ) -> list[InterviewSession]: ...
+
+    async def delete_session(
+        self,
+        session_id: str,
+    ) -> bool: ...
+
 
 class InMemoryStore:
     """Process-local store for tests and zero-config demos."""
@@ -54,3 +63,24 @@ class InMemoryStore:
         session_id: str,
     ) -> InterviewSession | None:
         return self.sessions.get(session_id)
+
+    async def list_sessions(
+        self,
+    ) -> list[InterviewSession]:
+        return [
+            session.model_copy(deep=True)
+            for session in self.sessions.values()
+        ]
+
+    async def delete_session(
+        self,
+        session_id: str,
+    ) -> bool:
+        async with self._lock:
+            return (
+                self.sessions.pop(
+                    session_id,
+                    None,
+                )
+                is not None
+            )
