@@ -91,24 +91,23 @@ class VoiceStreamBridge:
         locale: str,
         config: AudioStreamConfig,
     ) -> AudioStreamOpenResult:
-        voice_state = await self.voice.speech_started(
-            session_id
+        provider_session = await self.provider.open(
+            locale=locale,
+            config=config,
         )
+        try:
+            voice_state = await self.voice.speech_started(
+                session_id
+            )
+        except Exception:
+            await provider_session.cancel()
+            raise
+
         opened = self.manager.open(
             session_id=session_id,
             generation=voice_state.generation,
             config=config,
         )
-        try:
-            provider_session = await self.provider.open(
-                locale=locale,
-                config=config,
-            )
-        except Exception:
-            self.manager.close(
-                opened.state.stream_id
-            )
-            raise
 
         record = _ProviderStream(
             session=provider_session,
