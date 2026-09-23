@@ -104,6 +104,7 @@ class EvidenceGraph:
             quote=observation.quote,
             note=observation.note,
             source=observation.source,
+            judge_run_id=observation.judge_run_id,
         )
         node.evidence.append(item)
 
@@ -119,3 +120,71 @@ class EvidenceGraph:
             node.state = observation.state
             node.confidence = observation.confidence
         return item
+
+
+
+    @staticmethod
+    def recompute_node(
+        session: InterviewSession,
+        competency_id: str,
+    ) -> CompetencyEvidence:
+        node = session.evidence_graph.setdefault(
+            competency_id,
+            CompetencyEvidence(competency_id=competency_id),
+        )
+        active = [item for item in node.evidence if item.active]
+
+        if not active:
+            node.state = EvidenceState.UNKNOWN
+            node.confidence = None
+            return node
+
+        strongest_rank = max(_STATE_RANK[item.state] for item in active)
+        strongest = [
+            item for item in active
+            if _STATE_RANK[item.state] == strongest_rank
+        ]
+        node.state = strongest[0].state
+
+        confidences = [
+            item.confidence
+            for item in strongest
+            if item.state not in {
+                EvidenceState.CLAIMED,
+                EvidenceState.UNKNOWN,
+            }
+        ]
+        node.confidence = (
+            max(confidences)
+            if confidences
+            else None
+        )
+        return node
+
+    @staticmethod
+    def supersede_semantic_evidence_for_turn(
+        session: InterviewSession,
+        *,
+        turn_id: str,
+    ) -> list[EvidenceItem]:
+        superseded: list[EvidenceItem] = []
+        affected: set[str] = set()
+
+        for competency_id, node in session.evidence_graph.items():
+            for item in node.evidence:
+                if (
+                    item.active
+                    and item.turn_id == turn_id
+                    and item.source.startswith("semantic_judge:")
+                ):
+                    item.active = False
+                    superseded.append(item)
+                    affected.add(competency_id)
+
+        for competency_id in affected:
+            EvidenceGraph.recompute_node(
+                session,
+                competency_id,
+            )
+
+        return superseded
