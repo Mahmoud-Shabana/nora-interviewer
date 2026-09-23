@@ -77,5 +77,7 @@ def test_review_summary_aggregates_active_human_review_work():
         assert summary.review_required == 1
         assert summary.pending_appeals == 1
         assert summary.pending_integrity_signals == 1
+        assert summary.assigned_reviews == 0
+        assert summary.unassigned_review_required == 1
 
     run(scenario())
