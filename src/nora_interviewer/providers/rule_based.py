@@ -76,7 +76,14 @@ class RuleBasedBrain:
             return self._close()
 
         if job.tool_templates and len(session.tools) < job.max_tools:
+            used_templates = {
+                str(tool.payload.get("template_id"))
+                for tool in session.tools
+                if tool.payload.get("template_id")
+            }
             for policy in job.tool_templates:
+                if policy.template_id in used_templates:
+                    continue
                 if (
                     not policy.competency_ids
                     or active in policy.competency_ids
