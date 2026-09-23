@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
+from pydantic import ValidationError
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from .audio_stream_manager import AudioStreamManager
 from .authorization import AccessPolicy, Permission, Principal
 from .capabilities import SystemCapabilities, describe_capabilities
 from .coding import CodingChallengeRequest
@@ -14,6 +17,7 @@ from .config import (
     build_evidence_judge,
     build_principal_resolver,
     build_store,
+    build_streaming_speech_provider,
 )
 from .counterfactual import CounterfactualReplayReport
 from .feedback import CandidateFeedbackReport
@@ -52,6 +56,7 @@ from .review import (
 )
 from .review_bundle import ReviewBundle, build_review_bundle
 from .review_service import ReviewService
+from .providers.streaming_speech import StreamingSpeechUnavailableError
 from .retention import RetentionManager, RetentionReport, RetentionRequest
 from .service import InterviewService
 from .voice import (
@@ -60,6 +65,23 @@ from .voice import (
     TtsLifecycleEvent,
     VoiceSessionState,
     VoiceTurnResult,
+)
+from .voice_stream import (
+    AudioBackpressureError,
+    AudioChunkMessage,
+    AudioGenerationError,
+    AudioReconnectError,
+    AudioSequenceError,
+    AudioStreamCloseRequest,
+    AudioStreamError,
+    AudioStreamOpenRequest,
+    AudioStreamReconnectRequest,
+)
+from .voice_stream_bridge import (
+    StreamingFinalTranscript,
+    StreamingPartialTranscript,
+    StreamingProviderFailure,
+    VoiceStreamBridge,
 )
 from .web import WEB_DIR, render_interview_room, render_review_console
 
@@ -74,6 +96,15 @@ service = InterviewService(
 voice = RealtimeVoiceCoordinator(service=service, store=store)
 principal_resolver = build_principal_resolver()
 retention = RetentionManager(store)
+streaming_speech_provider = build_streaming_speech_provider()
+audio_stream_manager = AudioStreamManager()
+audio_bridge = VoiceStreamBridge(
+    manager=audio_stream_manager,
+    provider=streaming_speech_provider,
+    voice=voice,
+)
+AUDIO_RECONNECT_GRACE_SECONDS = 30.0
+_audio_expiry_tasks: dict[str, asyncio.Task] = {}
 
 
 def current_principal(
@@ -139,6 +170,9 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
+        for task in list(_audio_expiry_tasks.values()):
+            task.cancel()
+        await audio_bridge.close_all()
         await store.close()
 
 
@@ -975,3 +1009,408 @@ async def interview_socket(websocket: WebSocket, session_id: str) -> None:
     except HTTPException as exc:
         await websocket.send_json({"type": "error", "error": exc.detail})
         await websocket.close(code=1008)
+
+
+
+def _audio_error_payload(exc: Exception) -> dict:
+    if isinstance(exc, StreamingSpeechUnavailableError):
+        return {
+            "code": "stt_unavailable",
+            "message": str(exc),
+        }
+    if isinstance(exc, AudioStreamError):
+        return {
+            "code": exc.code,
+            "message": str(exc),
+        }
+    if isinstance(exc, ValidationError):
+        return {
+            "code": "invalid_audio_message",
+            "message": "Audio transport message failed validation",
+        }
+    if isinstance(exc, HTTPException):
+        return {
+            "code": f"http_{exc.status_code}",
+            "message": str(exc.detail),
+        }
+    return {
+        "code": "audio_transport_error",
+        "message": str(exc)[:1000],
+    }
+
+
+def _cancel_audio_expiry(stream_id: str) -> None:
+    task = _audio_expiry_tasks.pop(
+        stream_id,
+        None,
+    )
+    if task is not None:
+        task.cancel()
+
+
+def _schedule_audio_expiry(stream_id: str) -> None:
+    _cancel_audio_expiry(stream_id)
+
+    async def expire() -> None:
+        try:
+            await asyncio.sleep(
+                AUDIO_RECONNECT_GRACE_SECONDS
+            )
+            await audio_bridge.close(
+                stream_id=stream_id,
+                cancel_provider=True,
+            )
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            return
+        finally:
+            _audio_expiry_tasks.pop(
+                stream_id,
+                None,
+            )
+
+    _audio_expiry_tasks[stream_id] = (
+        asyncio.create_task(expire())
+    )
+
+
+@app.websocket("/v1/ws/audio/{session_id}")
+async def audio_socket(
+    websocket: WebSocket,
+    session_id: str,
+) -> None:
+    try:
+        principal = principal_resolver.resolve(
+            websocket.headers
+        )
+        session = await store.get_session(
+            session_id
+        )
+        if session is None:
+            await websocket.close(code=1008)
+            return
+        AccessPolicy.require(
+            principal,
+            Permission.USE_VOICE,
+            session=session,
+        )
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+
+    active_stream_id: str | None = None
+    event_task: asyncio.Task | None = None
+    send_lock = asyncio.Lock()
+
+    async def send_json(payload: dict) -> None:
+        async with send_lock:
+            await websocket.send_json(payload)
+
+    async def pump_events(stream_id: str) -> None:
+        try:
+            async for event in audio_bridge.events(
+                stream_id=stream_id
+            ):
+                if isinstance(
+                    event,
+                    StreamingPartialTranscript,
+                ):
+                    await send_json({
+                        "type": "transcript_partial",
+                        "data": {
+                            "text": event.event.text,
+                            "confidence": event.event.confidence,
+                            "voice_state": (
+                                event.state.model_dump(
+                                    mode="json"
+                                )
+                            ),
+                        },
+                    })
+                    continue
+
+                if isinstance(
+                    event,
+                    StreamingFinalTranscript,
+                ):
+                    result = event.result
+                    payload = {
+                        "text": event.event.text,
+                        "confidence": event.event.confidence,
+                        "voice_state": (
+                            result.state.model_dump(
+                                mode="json"
+                            )
+                        ),
+                        "completed": result.completed,
+                        "interviewer_turn": (
+                            result.interviewer_turn.model_dump(
+                                mode="json"
+                            )
+                            if result.interviewer_turn
+                            else None
+                        ),
+                        "tool_invocation": (
+                            result.tool_invocation.model_dump(
+                                mode="json"
+                            )
+                            if result.tool_invocation
+                            else None
+                        ),
+                    }
+                    await send_json({
+                        "type": "transcript_final",
+                        "data": payload,
+                    })
+                    continue
+
+                if isinstance(
+                    event,
+                    StreamingProviderFailure,
+                ):
+                    await send_json({
+                        "type": "error",
+                        "error": {
+                            "code": "stt_provider_failure",
+                            "message": event.message,
+                            "error_type": event.error_type,
+                        },
+                    })
+        except asyncio.CancelledError:
+            return
+        except WebSocketDisconnect:
+            return
+        except Exception as exc:
+            try:
+                await send_json({
+                    "type": "error",
+                    "error": _audio_error_payload(exc),
+                })
+            except Exception:
+                return
+
+    try:
+        while True:
+            message = await websocket.receive_json()
+            message_type = str(
+                message.get("type", "")
+            )
+
+            if message_type == "ping":
+                await send_json({"type": "pong"})
+                continue
+
+            if message_type == "open":
+                if active_stream_id is not None:
+                    await send_json({
+                        "type": "error",
+                        "error": {
+                            "code": "stream_already_open",
+                            "message": (
+                                "Close the active audio stream "
+                                "before opening another one."
+                            ),
+                        },
+                    })
+                    continue
+
+                request = AudioStreamOpenRequest.model_validate(
+                    message.get("data", {})
+                )
+                opened = await audio_bridge.open(
+                    session_id=session_id,
+                    locale=request.locale,
+                    config=request.config,
+                )
+                active_stream_id = (
+                    opened.state.stream_id
+                )
+                event_task = asyncio.create_task(
+                    pump_events(
+                        active_stream_id
+                    )
+                )
+                await send_json({
+                    "type": "stream_opened",
+                    "data": opened.model_dump(
+                        mode="json"
+                    ),
+                })
+                continue
+
+            if message_type == "reconnect":
+                if active_stream_id is not None:
+                    await send_json({
+                        "type": "error",
+                        "error": {
+                            "code": "stream_already_open",
+                            "message": (
+                                "This socket already has an "
+                                "active audio stream."
+                            ),
+                        },
+                    })
+                    continue
+
+                request = (
+                    AudioStreamReconnectRequest
+                    .model_validate(
+                        message.get("data", {})
+                    )
+                )
+                audio_bridge.reconnect(
+                    stream_id=request.stream_id,
+                    session_id=session_id,
+                    reconnect_token=(
+                        request.reconnect_token
+                    ),
+                    generation=request.generation,
+                    next_sequence=(
+                        request.next_sequence
+                    ),
+                )
+                _cancel_audio_expiry(
+                    request.stream_id
+                )
+                active_stream_id = (
+                    request.stream_id
+                )
+                event_task = asyncio.create_task(
+                    pump_events(
+                        active_stream_id
+                    )
+                )
+                await send_json({
+                    "type": "stream_reconnected",
+                    "data": (
+                        audio_stream_manager
+                        .state(
+                            active_stream_id
+                        )
+                        .model_dump(mode="json")
+                    ),
+                })
+                continue
+
+            if message_type == "chunk":
+                if active_stream_id is None:
+                    raise AudioReconnectError(
+                        "open or reconnect an audio stream first"
+                    )
+                chunk = AudioChunkMessage.model_validate(
+                    message.get("data", {})
+                )
+                result = await audio_bridge.push_chunk(
+                    stream_id=active_stream_id,
+                    chunk=chunk,
+                )
+                await send_json({
+                    "type": "chunk_ack",
+                    "data": result.model_dump(
+                        mode="json"
+                    ),
+                })
+                continue
+
+            if message_type == "close":
+                if active_stream_id is None:
+                    await send_json({
+                        "type": "stream_closed",
+                        "data": None,
+                    })
+                    continue
+
+                request = AudioStreamCloseRequest.model_validate(
+                    message.get(
+                        "data",
+                        {
+                            "stream_id": active_stream_id,
+                        },
+                    )
+                )
+                if (
+                    request.stream_id
+                    != active_stream_id
+                ):
+                    raise AudioReconnectError(
+                        "close request references "
+                        "a different audio stream"
+                    )
+
+                _cancel_audio_expiry(
+                    active_stream_id
+                )
+                await audio_bridge.close(
+                    stream_id=active_stream_id,
+                    cancel_provider=(
+                        request.cancel_provider
+                    ),
+                )
+                if (
+                    event_task is not None
+                    and not event_task.done()
+                ):
+                    event_task.cancel()
+                await send_json({
+                    "type": "stream_closed",
+                    "data": {
+                        "stream_id": (
+                            active_stream_id
+                        ),
+                    },
+                })
+                active_stream_id = None
+                event_task = None
+                continue
+
+            await send_json({
+                "type": "error",
+                "error": {
+                    "code": "unknown_audio_message",
+                    "message": (
+                        "Expected open, reconnect, chunk, "
+                        "close, or ping."
+                    ),
+                },
+            })
+
+    except WebSocketDisconnect:
+        if active_stream_id is not None:
+            _schedule_audio_expiry(
+                active_stream_id
+            )
+        if (
+            event_task is not None
+            and not event_task.done()
+        ):
+            event_task.cancel()
+        return
+    except (
+        AudioBackpressureError,
+        AudioGenerationError,
+        AudioReconnectError,
+        AudioSequenceError,
+        AudioStreamError,
+        StreamingSpeechUnavailableError,
+        ValidationError,
+        HTTPException,
+    ) as exc:
+        try:
+            await send_json({
+                "type": "error",
+                "error": _audio_error_payload(exc),
+            })
+        finally:
+            if active_stream_id is not None:
+                _schedule_audio_expiry(
+                    active_stream_id
+                )
+            if (
+                event_task is not None
+                and not event_task.done()
+            ):
+                event_task.cancel()
+            await websocket.close(code=1008)
