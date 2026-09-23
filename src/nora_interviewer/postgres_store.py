@@ -4,6 +4,7 @@ import asyncio
 from typing import Any
 
 from .models import InterviewSession, JobSpec
+from .rubric_drafting import RubricDraft
 from .storage import StoreConflictError
 
 
@@ -82,6 +83,17 @@ class PostgresStore:
                     )
                     await connection.execute(
                         """
+                        CREATE TABLE IF NOT EXISTS nora_rubric_drafts (
+                            id TEXT PRIMARY KEY,
+                            approved_job_id TEXT,
+                            payload JSONB NOT NULL,
+                            updated_at TIMESTAMPTZ NOT NULL
+                                DEFAULT CURRENT_TIMESTAMP
+                        )
+                        """
+                    )
+                    await connection.execute(
+                        """
                         CREATE TABLE IF NOT EXISTS nora_sessions (
                             id TEXT PRIMARY KEY,
                             job_id TEXT NOT NULL,
@@ -114,6 +126,12 @@ class PostgresStore:
         if isinstance(payload, str):
             return JobSpec.model_validate_json(payload)
         return JobSpec.model_validate(payload)
+
+    @staticmethod
+    def _decode_rubric_draft(payload: Any) -> RubricDraft:
+        if isinstance(payload, str):
+            return RubricDraft.model_validate_json(payload)
+        return RubricDraft.model_validate(payload)
 
     @staticmethod
     def _decode_session(payload: Any) -> InterviewSession:
@@ -159,6 +177,144 @@ class PostgresStore:
         if row is None:
             return None
         return self._decode_job(row[0])
+
+    async def put_rubric_draft(
+        self,
+        draft: RubricDraft,
+    ) -> None:
+        await self._ensure_open()
+        try:
+            async with self._pool.connection() as connection:
+                await connection.execute(
+                    """
+                    INSERT INTO nora_rubric_drafts(
+                        id,
+                        approved_job_id,
+                        payload,
+                        updated_at
+                    )
+                    VALUES (
+                        %s,
+                        NULL,
+                        %s,
+                        CURRENT_TIMESTAMP
+                    )
+                    """,
+                    (
+                        draft.id,
+                        self._Jsonb(
+                            draft.model_dump(
+                                mode="json"
+                            )
+                        ),
+                    ),
+                )
+        except self._UniqueViolation as exc:
+            raise StoreConflictError(
+                f"rubric draft {draft.id} already exists"
+            ) from exc
+
+    async def get_rubric_draft(
+        self,
+        draft_id: str,
+    ) -> RubricDraft | None:
+        await self._ensure_open()
+        async with self._pool.connection() as connection:
+            cursor = await connection.execute(
+                """
+                SELECT payload
+                FROM nora_rubric_drafts
+                WHERE id = %s
+                """,
+                (draft_id,),
+            )
+            row = await cursor.fetchone()
+
+        if row is None:
+            return None
+        return self._decode_rubric_draft(
+            row[0]
+        )
+
+    async def approve_rubric_draft(
+        self,
+        draft_id: str,
+        approved_draft: RubricDraft,
+        job: JobSpec,
+    ) -> None:
+        await self._ensure_open()
+        try:
+            async with self._pool.connection() as connection:
+                cursor = await connection.execute(
+                    """
+                    SELECT approved_job_id
+                    FROM nora_rubric_drafts
+                    WHERE id = %s
+                    FOR UPDATE
+                    """,
+                    (draft_id,),
+                )
+                row = await cursor.fetchone()
+                if row is None:
+                    raise KeyError(
+                        f"rubric draft {draft_id} not found"
+                    )
+                if row[0] is not None:
+                    raise StoreConflictError(
+                        f"rubric draft {draft_id} is already approved"
+                    )
+
+                await connection.execute(
+                    """
+                    INSERT INTO nora_jobs(
+                        id,
+                        payload,
+                        updated_at
+                    )
+                    VALUES (
+                        %s,
+                        %s,
+                        CURRENT_TIMESTAMP
+                    )
+                    """,
+                    (
+                        job.id,
+                        self._Jsonb(
+                            job.model_dump(
+                                mode="json"
+                            )
+                        ),
+                    ),
+                )
+                updated = await connection.execute(
+                    """
+                    UPDATE nora_rubric_drafts
+                    SET
+                        approved_job_id = %s,
+                        payload = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                      AND approved_job_id IS NULL
+                    RETURNING id
+                    """,
+                    (
+                        job.id,
+                        self._Jsonb(
+                            approved_draft.model_dump(
+                                mode="json"
+                            )
+                        ),
+                        draft_id,
+                    ),
+                )
+                if await updated.fetchone() is None:
+                    raise StoreConflictError(
+                        f"rubric draft {draft_id} was approved concurrently"
+                    )
+        except self._UniqueViolation as exc:
+            raise StoreConflictError(
+                f"job {job.id} already exists"
+            ) from exc
 
     async def put_session(
         self,
