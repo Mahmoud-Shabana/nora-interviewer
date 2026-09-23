@@ -86,6 +86,7 @@ class EventType(str, Enum):
     APPEAL_SUBMITTED = "appeal_submitted"
     EVIDENCE_OBSERVED = "evidence_observed"
     EVIDENCE_JUDGE_FAILED = "evidence_judge_failed"
+    EVIDENCE_JUDGE_DISAGREEMENT = "evidence_judge_disagreement"
     INTEGRITY_SIGNAL = "integrity_signal"
     TOOL_OPENED = "tool_opened"
     TOOL_SUBMITTED = "tool_submitted"
