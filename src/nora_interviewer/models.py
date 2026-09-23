@@ -43,6 +43,14 @@ class AppealStatus(str, Enum):
     REVIEWED = "reviewed"
 
 
+class IntegrityLevel(str, Enum):
+    NONE = "none"
+    IDENTITY = "identity"
+    PASSIVE_SIGNALS = "passive_signals"
+    SECURE = "secure"
+    PROCTORED = "proctored"
+
+
 class EventType(str, Enum):
     SESSION_CREATED = "session_created"
     INTERVIEW_STARTED = "interview_started"
@@ -51,6 +59,7 @@ class EventType(str, Enum):
     TRANSCRIPT_CORRECTED = "transcript_corrected"
     APPEAL_SUBMITTED = "appeal_submitted"
     EVIDENCE_OBSERVED = "evidence_observed"
+    INTEGRITY_SIGNAL = "integrity_signal"
     SESSION_COMPLETED = "session_completed"
 
 
@@ -83,6 +92,7 @@ class CreateSession(StrictModel):
     locale: str = "en"
     consent_to_ai_interview: bool
     consent_to_transcript: bool
+    integrity_level: IntegrityLevel = IntegrityLevel.NONE
 
 
 class Turn(StrictModel):
@@ -137,6 +147,22 @@ class CandidateAppealRequest(StrictModel):
     turn_ids: list[str] = Field(default_factory=list)
 
 
+class IntegritySignal(StrictModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    kind: str = Field(min_length=2, max_length=120)
+    confidence: float = Field(ge=0.0, le=1.0)
+    note: str = Field(min_length=2, max_length=2000)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    requires_human_review: bool = True
+
+
+class IntegritySignalRequest(StrictModel):
+    kind: str = Field(min_length=2, max_length=120)
+    confidence: float = Field(ge=0.0, le=1.0)
+    note: str = Field(min_length=2, max_length=2000)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
+
 class InterviewEvent(StrictModel):
     seq: int = Field(ge=1)
     type: EventType
@@ -149,6 +175,7 @@ class InterviewSession(StrictModel):
     job_id: str
     candidate_ref: str
     locale: str
+    integrity_level: IntegrityLevel = IntegrityLevel.NONE
     status: SessionStatus = SessionStatus.CREATED
     turns: list[Turn] = Field(default_factory=list)
     covered_competencies: list[str] = Field(default_factory=list)
@@ -158,6 +185,7 @@ class InterviewSession(StrictModel):
     evidence_graph: dict[str, CompetencyEvidence] = Field(default_factory=dict)
     transcript_revisions: list[TranscriptRevision] = Field(default_factory=list)
     appeals: list[CandidateAppeal] = Field(default_factory=list)
+    integrity_signals: list[IntegritySignal] = Field(default_factory=list)
     events: list[InterviewEvent] = Field(default_factory=list)
 
 
