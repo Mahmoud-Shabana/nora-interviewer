@@ -5,7 +5,22 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import build_brain
-from .models import CandidateResponse, CreateSession, InterviewSession, JobSpec, SessionStep, VoxRubricTrace
+from .models import (
+    CandidateAppeal,
+    CandidateAppealRequest,
+    CandidateResponse,
+    CompetencyEvidence,
+    CreateSession,
+    EvidenceObservation,
+    InterviewEvent,
+    InterviewSession,
+    JobSpec,
+    SessionStep,
+    TranscriptCorrectionRequest,
+    TranscriptRevision,
+    VoxRubricTrace,
+)
+from .replay import ReplayState
 from .service import InterviewService
 from .storage import InMemoryStore
 from .web import WEB_DIR, render_interview_room
@@ -14,7 +29,7 @@ store = InMemoryStore()
 service = InterviewService(store=store, brain=build_brain())
 app = FastAPI(
     title="Nora Interviewer",
-    version="0.2.0",
+    version="0.3.0",
     description="Provider-neutral orchestration API for auditable AI interviews.",
 )
 app.mount("/assets", StaticFiles(directory=WEB_DIR), name="assets")
@@ -56,6 +71,59 @@ async def get_session(session_id: str) -> InterviewSession:
     if not session:
         raise HTTPException(404, "Session not found")
     return session
+
+
+
+
+@app.post(
+    "/v1/sessions/{session_id}/corrections",
+    response_model=TranscriptRevision,
+    status_code=201,
+)
+async def correct_transcript(
+    session_id: str,
+    request: TranscriptCorrectionRequest,
+) -> TranscriptRevision:
+    return await service.correct_transcript(session_id, request)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/appeals",
+    response_model=CandidateAppeal,
+    status_code=201,
+)
+async def submit_appeal(
+    session_id: str,
+    request: CandidateAppealRequest,
+) -> CandidateAppeal:
+    return await service.submit_appeal(session_id, request)
+
+
+@app.post(
+    "/v1/sessions/{session_id}/evidence",
+    response_model=CompetencyEvidence,
+)
+async def observe_evidence(
+    session_id: str,
+    observation: EvidenceObservation,
+) -> CompetencyEvidence:
+    return await service.observe_evidence(session_id, observation)
+
+
+@app.get(
+    "/v1/sessions/{session_id}/events",
+    response_model=list[InterviewEvent],
+)
+async def get_events(session_id: str) -> list[InterviewEvent]:
+    return await service.events(session_id)
+
+
+@app.get(
+    "/v1/sessions/{session_id}/replay",
+    response_model=ReplayState,
+)
+async def replay_session(session_id: str) -> ReplayState:
+    return await service.replay(session_id)
 
 
 @app.get("/v1/sessions/{session_id}/voxrubric", response_model=VoxRubricTrace)
