@@ -100,7 +100,12 @@ from .voice_stream_bridge import (
     StreamingProviderFailure,
     VoiceStreamBridge,
 )
-from .web import WEB_DIR, render_interview_room, render_review_console
+from .web import (
+    WEB_DIR,
+    render_interview_room,
+    render_job_studio,
+    render_review_console,
+)
 
 API_VERSION = "0.4.0-dev"
 
@@ -219,6 +224,11 @@ async def home() -> HTMLResponse:
 @app.get("/review", response_class=HTMLResponse)
 async def review_console() -> HTMLResponse:
     return HTMLResponse(render_review_console())
+
+
+@app.get("/studio", response_class=HTMLResponse)
+async def job_studio() -> HTMLResponse:
+    return HTMLResponse(render_job_studio())
 
 
 @app.get("/health")
