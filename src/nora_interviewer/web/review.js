@@ -43,6 +43,10 @@ function renderQueue(items) {
         <em>${item.requires_human_review ? "Review" : "Clear"}</em>
       </div>
       <small>${item.candidate_ref}</small>
+      <div class="queue-meta">
+        ${item.failed_evidence_runs ? `<span class="meta-danger">${item.failed_evidence_runs} judge failure(s)</span>` : ""}
+        ${item.stale_evidence_runs ? `<span class="meta-warn">${item.stale_evidence_runs} stale evidence run(s)</span>` : ""}
+      </div>
       <div class="reason-chips">${badges}</div>
     `;
     button.addEventListener("click", () => loadReport(item.session_id, button));
@@ -292,6 +296,8 @@ async function loadSummary() {
     $("sumAppeals").textContent = summary.pending_appeals;
     $("sumIntegrity").textContent = summary.pending_integrity_signals;
     $("sumTools").textContent = summary.unresolved_tools;
+    $("sumStaleEvidence").textContent = summary.stale_evidence_runs;
+    $("sumFailedEvidence").textContent = summary.failed_evidence_runs;
     $("sumCompleted").textContent = summary.completed_sessions;
   } catch (error) {
     console.warn("Review summary unavailable", error);
