@@ -10,6 +10,7 @@ from .config import (
     build_brain,
     build_evidence_judge,
     build_principal_resolver,
+    build_store,
 )
 from .counterfactual import CounterfactualReplayReport
 from .feedback import CandidateFeedbackReport
@@ -37,7 +38,6 @@ from .models import (
 )
 from .replay import ReplayState
 from .service import InterviewService
-from .storage import InMemoryStore
 from .voice import (
     RealtimeVoiceCoordinator,
     TranscriptEvent,
@@ -47,7 +47,7 @@ from .voice import (
 )
 from .web import WEB_DIR, render_interview_room
 
-store = InMemoryStore()
+store = build_store()
 service = InterviewService(
     store=store,
     brain=build_brain(),
