@@ -296,6 +296,15 @@ class VoiceStreamBridge:
             except asyncio.CancelledError:
                 pass
 
+    async def close_all(self) -> None:
+        for stream_id in list(
+            self._provider_streams
+        ):
+            await self.close(
+                stream_id=stream_id,
+                cancel_provider=True,
+            )
+
     def _provider(
         self,
         stream_id: str,
