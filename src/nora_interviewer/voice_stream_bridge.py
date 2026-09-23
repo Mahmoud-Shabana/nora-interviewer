@@ -243,12 +243,28 @@ class VoiceStreamBridge:
             stream_id,
             chunk,
         )
-        if audio is None:
-            return result
-
         provider_stream = self._provider(
             stream_id
         )
+        if audio is None:
+            return result
+
+        if provider_stream.committed:
+            self.manager.acknowledge_processed(
+                stream_id,
+                len(audio),
+            )
+            state = self.manager.state(stream_id)
+            return AudioChunkResult(
+                accepted=True,
+                duplicate=False,
+                sequence=result.sequence,
+                next_sequence=result.next_sequence,
+                generation=result.generation,
+                buffered_bytes=state.buffered_bytes,
+                vad=None,
+            )
+
         try:
             await provider_stream.session.push_audio(
                 audio
