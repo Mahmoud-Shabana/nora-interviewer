@@ -1179,21 +1179,21 @@ Nora is intentionally conservative around high-stakes behavior.
 - [x] Privacy-minimized operations snapshot
 - [x] Protected Prometheus-compatible metrics
 
-## 🚧 In progress
+## ✅ Recently completed on main
 
-- [ ] Browser STT automatic reconnect/resume
-- [ ] Semantic evidence calibration benchmark packs
+- [x] Browser STT automatic reconnect/resume
+- [x] Semantic evidence calibration benchmark packs
+- [x] Voice activity detection (VAD)
+- [x] Distributed request/session correlation tracing
+- [x] retention controls
+- [x] Nora adapter for VoxRubric Arena
 
 ## 🧭 Next
 
-- [ ] Voice activity detection (VAD)
-- [ ] Distributed request/session correlation tracing
 - [ ] Organization-specific OIDC login/session integration
 - [ ] encrypted object storage
-- [ ] retention controls
 - [ ] external sandbox service
 - [ ] richer domain-specific practical evaluators
-- [ ] Nora adapter for VoxRubric Arena
 - [ ] Arabic dialect and technical-ASR benchmarks
 
 ---
