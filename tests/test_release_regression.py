@@ -228,11 +228,13 @@ def test_full_release_regression_covers_interview_controls_evidence_tool_review_
                 "kind": "thinking_time",
                 "target_turn_id": opening.interviewer_turn.id,
                 "text": None,
+                "pauses_interview": True,
             },
             {
                 "kind": "resume",
                 "target_turn_id": opening.interviewer_turn.id,
                 "text": None,
+                "pauses_interview": False,
             },
         ]
         assert trace.metadata["audit_chain"]["verified"] is True
