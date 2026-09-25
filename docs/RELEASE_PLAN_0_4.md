@@ -50,10 +50,20 @@ This file is the canonical release checklist. It exists specifically to prevent 
 
 ### Gate 3 — Failure/recovery regression
 
-- [ ] exercise storage conflict behavior
-- [ ] exercise provider degradation/fallback behavior
-- [ ] exercise session cancellation cleanup
-- [ ] verify SLO/operations state reflects the failures without high-cardinality identifiers
+- [x] exercise storage conflict behavior
+- [x] exercise provider degradation/fallback behavior
+- [x] exercise session cancellation cleanup
+- [x] verify SLO/operations state reflects the failures without high-cardinality identifiers
+
+### Gate 3 evidence
+
+Covered by:
+- `tests/test_storage_concurrency.py`
+- `tests/test_guarded_voice.py`
+- `tests/test_voice_transport_telemetry.py`
+- `tests/test_session_cancellation.py`
+- `tests/test_voice_session_cancellation.py`
+- `tests/test_release_failure_recovery.py`
 
 ### Gate 4 — Release preparation
 
