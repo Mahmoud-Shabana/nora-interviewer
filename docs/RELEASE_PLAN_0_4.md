@@ -38,15 +38,15 @@ This file is the canonical release checklist. It exists specifically to prevent 
 ### Gate 1 — Truth reconciliation
 
 - [x] audit current implementation before adding new work
-- [ ] reconcile stale README roadmap entries
-- [ ] keep this release checklist aligned with completed commits
+- [x] reconcile stale README roadmap entries
+- [x] keep this release checklist aligned with completed commits
 
 ### Gate 2 — End-to-end release regression
 
-- [ ] create a deterministic full interview regression covering job creation, session start, candidate answer, evidence, review, and VoxRubric export
-- [ ] include candidate control behavior in the regression
-- [ ] include at least one practical-tool lifecycle
-- [ ] verify audit-chain export remains valid at the end of the flow
+- [x] create a deterministic full interview regression covering job creation, session start, candidate answer, evidence, review, and VoxRubric export
+- [x] include candidate control behavior in the regression
+- [x] include at least one practical-tool lifecycle
+- [x] verify audit-chain export remains valid at the end of the flow
 
 ### Gate 3 — Failure/recovery regression
 
