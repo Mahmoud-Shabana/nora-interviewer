@@ -211,6 +211,49 @@ def build_artifact_service(
             f"Invalid artifact service configuration: {exc}"
         ) from exc
 
+
+def _completion_resilience_kwargs(
+    prefix: str,
+) -> dict:
+    try:
+        return {
+            "timeout_seconds": float(
+                os.getenv(
+                    f"{prefix}_TIMEOUT_SECONDS",
+                    "30",
+                )
+            ),
+            "max_attempts": int(
+                os.getenv(
+                    f"{prefix}_MAX_ATTEMPTS",
+                    "2",
+                )
+            ),
+            "retry_base_seconds": float(
+                os.getenv(
+                    f"{prefix}_RETRY_BASE_SECONDS",
+                    "0.25",
+                )
+            ),
+            "failure_threshold": int(
+                os.getenv(
+                    f"{prefix}_FAILURE_THRESHOLD",
+                    "3",
+                )
+            ),
+            "cooldown_seconds": float(
+                os.getenv(
+                    f"{prefix}_COOLDOWN_SECONDS",
+                    "20",
+                )
+            ),
+        }
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Invalid resilience setting for {prefix}"
+        ) from exc
+
+
 def build_brain():
     mode = os.getenv("NORA_BRAIN_MODE", "rule").strip().lower()
     fallback = RuleBasedBrain()
@@ -231,6 +274,9 @@ def build_brain():
                 base_url=base_url,
                 model=model,
                 api_key=api_key,
+                **_completion_resilience_kwargs(
+                    "NORA_LLM"
+                ),
             )
         )
         return FallbackBrain(primary=primary, fallback=fallback)
@@ -275,6 +321,9 @@ def build_evidence_judge():
             base_url=base_url,
             model=model,
             api_key=api_key,
+            **_completion_resilience_kwargs(
+                "NORA_EVIDENCE_JUDGE"
+            ),
         )
         return LLMEvidenceJudge(
             provider,
@@ -328,6 +377,9 @@ def build_evidence_judge():
                     base_url=base_url,
                     model=model,
                     api_key=api_key,
+                    **_completion_resilience_kwargs(
+                        "NORA_EVIDENCE_JUDGE"
+                    ),
                 ),
                 judge_id=f"openai-compatible:{model}",
             )
@@ -378,6 +430,9 @@ def build_rubric_drafter():
             base_url=base_url,
             model=model,
             api_key=api_key,
+            **_completion_resilience_kwargs(
+                "NORA_RUBRIC_DRAFTER"
+            ),
         )
         return LLMRubricDrafter(
             provider,
