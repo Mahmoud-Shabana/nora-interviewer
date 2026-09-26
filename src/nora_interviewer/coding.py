@@ -174,6 +174,12 @@ class CodingInterviewTool:
                 evidence={
                     "timed_out": True,
                     "duration_ms": result.duration_ms,
+                    "sandbox_provider": result.provider_id,
+                    "sandbox_execution_id": result.execution_id,
+                    "sandbox_artifacts": [
+                        item.model_dump(mode="json")
+                        for item in result.artifacts
+                    ],
                 },
             )
 
@@ -188,6 +194,12 @@ class CodingInterviewTool:
                     "exit_code": result.exit_code,
                     "stderr": result.stderr[-4000:],
                     "duration_ms": result.duration_ms,
+                    "sandbox_provider": result.provider_id,
+                    "sandbox_execution_id": result.execution_id,
+                    "sandbox_artifacts": [
+                        item.model_dump(mode="json")
+                        for item in result.artifacts
+                    ],
                 },
             )
 
@@ -206,6 +218,11 @@ class CodingInterviewTool:
                 "failures": parsed.get("failures", []),
                 "duration_ms": result.duration_ms,
                 "exit_code": result.exit_code,
-                "sandbox": "docker-or-external",
+                "sandbox_provider": result.provider_id,
+                "sandbox_execution_id": result.execution_id,
+                "sandbox_artifacts": [
+                    item.model_dump(mode="json")
+                    for item in result.artifacts
+                ],
             },
         )
