@@ -108,6 +108,20 @@ def _parse_result(stdout: str) -> dict | None:
     return None
 
 
+def _evaluation_provenance(
+    invocation: ToolInvocation,
+) -> dict:
+    return {
+        "evaluator_id": "nora.coding.python_tests",
+        "evaluator_version": "1",
+        "tool_kind": "coding",
+        "template_id": invocation.payload.get(
+            "template_id"
+        ),
+        "automatic_hiring_decision": False,
+    }
+
+
 class CodingInterviewTool:
     kind = ToolKind.CODING
 
@@ -134,7 +148,14 @@ class CodingInterviewTool:
                 passed=False,
                 score=0.0,
                 summary="Coding submission did not contain non-empty source code.",
-                evidence={"reason": "missing_code"},
+                evidence={
+                    "reason": "missing_code",
+                    "evaluation_provenance": (
+                        _evaluation_provenance(
+                            invocation
+                        )
+                    ),
+                },
             )
 
         challenge = self.challenges.get(invocation.id)
@@ -160,13 +181,11 @@ class CodingInterviewTool:
                 evidence={
                     "sandbox_unavailable": str(exc),
                     "review_required": True,
-                    "evaluation_provenance": {
-                    "evaluator_id": "nora.coding.python_tests",
-                    "evaluator_version": "1",
-                    "tool_kind": "coding",
-                    "template_id": invocation.payload.get("template_id"),
-                    "automatic_hiring_decision": False,
-                },
+                    "evaluation_provenance": (
+                        _evaluation_provenance(
+                            invocation
+                        )
+                    ),
                 },
             )
 
@@ -187,13 +206,11 @@ class CodingInterviewTool:
                         item.model_dump(mode="json")
                         for item in result.artifacts
                     ],
-                    "evaluation_provenance": {
-                    "evaluator_id": "nora.coding.python_tests",
-                    "evaluator_version": "1",
-                    "tool_kind": "coding",
-                    "template_id": invocation.payload.get("template_id"),
-                    "automatic_hiring_decision": False,
-                },
+                    "evaluation_provenance": (
+                        _evaluation_provenance(
+                            invocation
+                        )
+                    ),
                 },
             )
 
@@ -214,13 +231,11 @@ class CodingInterviewTool:
                         item.model_dump(mode="json")
                         for item in result.artifacts
                     ],
-                    "evaluation_provenance": {
-                    "evaluator_id": "nora.coding.python_tests",
-                    "evaluator_version": "1",
-                    "tool_kind": "coding",
-                    "template_id": invocation.payload.get("template_id"),
-                    "automatic_hiring_decision": False,
-                },
+                    "evaluation_provenance": (
+                        _evaluation_provenance(
+                            invocation
+                        )
+                    ),
                 },
             )
 
@@ -245,12 +260,10 @@ class CodingInterviewTool:
                     item.model_dump(mode="json")
                     for item in result.artifacts
                 ],
-                "evaluation_provenance": {
-                    "evaluator_id": "nora.coding.python_tests",
-                    "evaluator_version": "1",
-                    "tool_kind": "coding",
-                    "template_id": invocation.payload.get("template_id"),
-                    "automatic_hiring_decision": False,
-                },
+                "evaluation_provenance": (
+                        _evaluation_provenance(
+                            invocation
+                        )
+                    ),
             },
         )
