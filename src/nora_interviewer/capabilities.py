@@ -29,6 +29,7 @@ class SystemCapabilities(StrictModel):
     session_cancellation: bool = True
     storage_readiness: bool = True
     jwt_jwks_auth: bool = False
+    organization_oidc_auth: bool = False
     evidence_judge_ensemble: bool = False
     streaming_stt_enabled: bool = False
     streaming_stt_backend: str = "DisabledStreamingSpeechProvider"
@@ -90,6 +91,10 @@ def describe_capabilities(
         jwt_jwks_auth=(
             type(principal_resolver).__name__
             == "JwtJwksPrincipalResolver"
+        ),
+        organization_oidc_auth=(
+            type(principal_resolver).__name__
+            == "OrganizationOidcPrincipalResolver"
         ),
         interview_brain=type(service.brain).__name__,
         evidence_judge_enabled=(
