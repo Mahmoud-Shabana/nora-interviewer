@@ -25,6 +25,7 @@ from .config import (
     build_streaming_tts_provider,
     build_vad_config,
     build_voice_provider_health_registry,
+    build_webhook_store,
 )
 from .counterfactual import CounterfactualReplayReport
 from .feedback import CandidateFeedbackReport
@@ -152,7 +153,9 @@ from .web import (
 
 API_VERSION = "0.6.0-dev"
 
-store = build_store()
+store = build_webhook_store(
+    build_store()
+)
 artifact_store = build_artifact_store()
 artifact_service = build_artifact_service(
     store=store,
