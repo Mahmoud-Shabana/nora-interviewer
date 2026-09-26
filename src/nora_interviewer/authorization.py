@@ -144,6 +144,23 @@ class AccessPolicy:
                 ),
             )
 
+        if (
+            session is not None
+            and principal.role is not ActorRole.SERVICE
+            and (
+                principal.organization_id is not None
+                or session.organization_id is not None
+            )
+            and principal.organization_id != session.organization_id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Principal cannot access a session owned by "
+                    "another organization"
+                ),
+            )
+
         if principal.role is ActorRole.CANDIDATE:
             if principal.candidate_ref is None:
                 raise HTTPException(
