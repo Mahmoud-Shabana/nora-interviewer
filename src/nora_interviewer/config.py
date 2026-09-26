@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 
+from .artifact_service import ArtifactService
+from .artifact_storage import (
+    DisabledArtifactObjectStore,
+    EncryptedLocalArtifactObjectStore,
+)
 from .authorization import ActorRole
 from .authn import (
     DisabledPrincipalResolver,
@@ -31,6 +37,115 @@ from .sqlite_store import SqliteStore
 from .storage import InMemoryStore
 from .vad import VadConfig
 
+
+
+def build_artifact_store():
+    """Build the configured candidate artifact/audio object store."""
+
+    mode = os.getenv(
+        "NORA_ARTIFACT_STORE_MODE",
+        "disabled",
+    ).strip().lower()
+
+    if mode == "disabled":
+        return DisabledArtifactObjectStore()
+
+    if mode == "encrypted-local":
+        root = os.getenv(
+            "NORA_ARTIFACT_LOCAL_PATH",
+            ".nora/artifacts",
+        ).strip()
+        raw_key = os.getenv(
+            "NORA_ARTIFACT_ENCRYPTION_KEY_B64",
+            "",
+        ).strip()
+        key_id = os.getenv(
+            "NORA_ARTIFACT_ENCRYPTION_KEY_ID",
+            "primary",
+        ).strip()
+
+        if not root or not raw_key:
+            raise RuntimeError(
+                "NORA_ARTIFACT_LOCAL_PATH and "
+                "NORA_ARTIFACT_ENCRYPTION_KEY_B64 are required "
+                "in encrypted-local artifact mode"
+            )
+
+        try:
+            padding = "=" * ((-len(raw_key)) % 4)
+            encryption_key = base64.urlsafe_b64decode(
+                raw_key + padding
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "NORA_ARTIFACT_ENCRYPTION_KEY_B64 must be valid base64"
+            ) from exc
+
+        try:
+            return EncryptedLocalArtifactObjectStore(
+                root,
+                encryption_key=encryption_key,
+                key_id=key_id,
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Invalid encrypted artifact storage configuration: {exc}"
+            ) from exc
+
+    raise RuntimeError(
+        f"Unsupported NORA_ARTIFACT_STORE_MODE: {mode}"
+    )
+
+
+def build_artifact_service(
+    *,
+    store,
+    object_store,
+) -> ArtifactService:
+    if object_store.provider_id == "disabled":
+        signing_secret = None
+    else:
+        raw_secret = os.getenv(
+            "NORA_ARTIFACT_SIGNING_SECRET",
+            "",
+        )
+        if len(raw_secret.encode("utf-8")) < 32:
+            raise RuntimeError(
+                "NORA_ARTIFACT_SIGNING_SECRET must be at least 32 bytes "
+                "when artifact storage is enabled"
+            )
+        signing_secret = raw_secret.encode("utf-8")
+
+    try:
+        max_bytes = int(
+            os.getenv(
+                "NORA_ARTIFACT_MAX_BYTES",
+                str(50 * 1024 * 1024),
+            )
+        )
+        access_ttl = int(
+            os.getenv(
+                "NORA_ARTIFACT_ACCESS_TTL_SECONDS",
+                "300",
+            )
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            "Artifact size and access TTL settings must be integers"
+        ) from exc
+
+    try:
+        return ArtifactService(
+            store=store,
+            object_store=object_store,
+            signing_secret=signing_secret,
+            max_artifact_bytes=max_bytes,
+            access_ttl_seconds=access_ttl,
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Invalid artifact service configuration: {exc}"
+        ) from exc
 
 def build_brain():
     mode = os.getenv("NORA_BRAIN_MODE", "rule").strip().lower()
