@@ -14,7 +14,7 @@
   <img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-blue.svg">
   <img alt="Status Alpha" src="https://img.shields.io/badge/Status-Alpha-orange">
   <img alt="Release 0.3.0" src="https://img.shields.io/badge/Package-0.3.0-6f42c1">
-  <img alt="Main v0.4 development" src="https://img.shields.io/badge/main-v0.4--dev-8A2BE2">
+  <img alt="Main v0.4 release preparation" src="https://img.shields.io/badge/main-v0.4--release--prep-8A2BE2">
   <img alt="CI" src="https://github.com/Mahmoud-Shabana/nora-interviewer/actions/workflows/ci.yml/badge.svg">
 </p>
 
@@ -59,7 +59,7 @@ It separates:
 | Area | Status |
 |---|---|
 | Published package metadata | **0.3.0** |
-| Main branch | **v0.4 development** |
+| Main branch | **v0.4 release preparation** |
 | Core orchestration | ✅ Implemented |
 | Dual-lane interviewing | ✅ Implemented |
 | Candidate controls | ✅ Implemented |
@@ -82,6 +82,8 @@ It separates:
 | Dry-run-first session retention | ✅ Implemented |
 | Tamper-evident audit hash chain | ✅ Implemented |
 | Protected system capabilities | ✅ Implemented |
+| End-to-end release regression coverage | ✅ Implemented |
+| Failure/recovery release regression coverage | ✅ Implemented |
 
 ---
 
