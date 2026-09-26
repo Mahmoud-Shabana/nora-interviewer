@@ -5,7 +5,7 @@ import os
 import tempfile
 from pathlib import Path
 from time import perf_counter
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import Field
 
@@ -23,12 +23,23 @@ class SandboxLimits(StrictModel):
     pids_limit: int = Field(default=64, ge=16, le=512)
 
 
+class SandboxProducedArtifact(StrictModel):
+    name: str = Field(min_length=1, max_length=500)
+    media_type: str = Field(min_length=1, max_length=200)
+    size_bytes: int = Field(ge=0)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reference: str | None = Field(default=None, max_length=2000)
+
+
 class SandboxResult(StrictModel):
     exit_code: int | None = None
     stdout: str = ""
     stderr: str = ""
     timed_out: bool = False
     duration_ms: int = Field(ge=0)
+    provider_id: str = Field(default="unknown", min_length=1, max_length=200)
+    execution_id: str | None = Field(default=None, max_length=500)
+    artifacts: list[SandboxProducedArtifact] = Field(default_factory=list)
 
 
 class SandboxRunner(Protocol):
@@ -148,7 +159,161 @@ class DockerSandboxRunner:
                 stderr=stderr.decode("utf-8", errors="replace")[-20_000:],
                 timed_out=timed_out,
                 duration_ms=duration_ms,
+                provider_id="docker",
             )
+
+
+
+class RemoteSandboxRunner:
+    """Dispatch execution to a dedicated Nora sandbox service.
+
+    Protocol: nora.sandbox.v1
+    Endpoint: POST {base_url}/v1/executions/python
+    """
+
+    provider_id = "remote"
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        token: str | None = None,
+        request_timeout_seconds: float = 35.0,
+    ) -> None:
+        base_url = base_url.rstrip("/")
+        if not base_url:
+            raise ValueError("remote sandbox base_url is required")
+        if request_timeout_seconds <= 0:
+            raise ValueError(
+                "remote sandbox request timeout must be positive"
+            )
+        self.base_url = base_url
+        self.token = token
+        self.request_timeout_seconds = request_timeout_seconds
+
+    async def run_python(
+        self,
+        *,
+        source: str,
+        harness: str,
+        limits: SandboxLimits,
+    ) -> SandboxResult:
+        try:
+            import httpx
+        except ImportError as exc:
+            raise SandboxUnavailable(
+                "Remote sandbox requires httpx"
+            ) from exc
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        if self.token:
+            headers["Authorization"] = (
+                "Bearer " + self.token
+            )
+
+        payload: dict[str, Any] = {
+            "protocol": "nora.sandbox.v1",
+            "language": "python",
+            "source": source,
+            "harness": harness,
+            "limits": limits.model_dump(
+                mode="json"
+            ),
+            "policy": {
+                "network_access": False,
+                "filesystem": "ephemeral",
+                "privileged": False,
+                "max_output_bytes": 20000,
+            },
+        }
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.request_timeout_seconds,
+            ) as client:
+                response = await client.post(
+                    self.base_url
+                    + "/v1/executions/python",
+                    headers=headers,
+                    json=payload,
+                )
+        except (
+            httpx.TimeoutException,
+            httpx.RequestError,
+        ) as exc:
+            raise SandboxUnavailable(
+                "Remote sandbox is unavailable"
+            ) from exc
+
+        if response.status_code in {
+            408,
+            429,
+            502,
+            503,
+            504,
+        }:
+            raise SandboxUnavailable(
+                "Remote sandbox is temporarily unavailable"
+            )
+        if response.status_code < 200 or response.status_code >= 300:
+            raise SandboxUnavailable(
+                "Remote sandbox rejected the execution request"
+            )
+
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise SandboxUnavailable(
+                "Remote sandbox returned invalid JSON"
+            ) from exc
+        if not isinstance(body, dict):
+            raise SandboxUnavailable(
+                "Remote sandbox returned an invalid response"
+            )
+        if body.get("protocol") != "nora.sandbox.v1":
+            raise SandboxUnavailable(
+                "Remote sandbox protocol version mismatch"
+            )
+
+        result_payload = body.get(
+            "result"
+        )
+        if not isinstance(result_payload, dict):
+            raise SandboxUnavailable(
+                "Remote sandbox response is missing result"
+            )
+        result_payload = dict(result_payload)
+        result_payload["provider_id"] = str(
+            body.get("provider_id")
+            or "remote"
+        )
+        execution_id = body.get(
+            "execution_id"
+        )
+        if execution_id is not None:
+            result_payload[
+                "execution_id"
+            ] = str(execution_id)
+
+        try:
+            result = SandboxResult.model_validate(
+                result_payload
+            )
+        except Exception as exc:
+            raise SandboxUnavailable(
+                "Remote sandbox result failed contract validation"
+            ) from exc
+
+        result.stdout = result.stdout[
+            -20_000:
+        ]
+        result.stderr = result.stderr[
+            -20_000:
+        ]
+        return result
 
 
 def default_sandbox_runner() -> SandboxRunner:
@@ -158,4 +323,49 @@ def default_sandbox_runner() -> SandboxRunner:
     if mode == "docker":
         image = os.getenv("NORA_SANDBOX_IMAGE", "python:3.12-alpine").strip()
         return DockerSandboxRunner(image=image)
+    if mode == "remote":
+        base_url = os.getenv(
+            "NORA_SANDBOX_REMOTE_URL",
+            "",
+        ).strip()
+        token = os.getenv(
+            "NORA_SANDBOX_REMOTE_TOKEN"
+        )
+        allow_insecure = os.getenv(
+            "NORA_SANDBOX_REMOTE_ALLOW_INSECURE",
+            "false",
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        if not base_url:
+            raise RuntimeError(
+                "NORA_SANDBOX_REMOTE_URL is required in remote mode"
+            )
+        if (
+            not base_url.startswith("https://")
+            and not allow_insecure
+        ):
+            raise RuntimeError(
+                "NORA_SANDBOX_REMOTE_URL must use https:// unless "
+                "NORA_SANDBOX_REMOTE_ALLOW_INSECURE=true"
+            )
+        try:
+            request_timeout = float(
+                os.getenv(
+                    "NORA_SANDBOX_REMOTE_TIMEOUT_SECONDS",
+                    "35",
+                )
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                "NORA_SANDBOX_REMOTE_TIMEOUT_SECONDS must be numeric"
+            ) from exc
+        try:
+            return RemoteSandboxRunner(
+                base_url=base_url,
+                token=token,
+                request_timeout_seconds=request_timeout,
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Invalid remote sandbox configuration: {exc}"
+            ) from exc
     raise RuntimeError(f"Unsupported NORA_SANDBOX_MODE: {mode}")
