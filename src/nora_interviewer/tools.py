@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from .domain_evaluators import (
+    DataAnalysisEvaluator,
+    DocumentAnalysisEvaluator,
+    SystemDesignEvaluator,
+)
 from .models import (
     InterviewSession,
     JobSpec,
@@ -76,4 +81,14 @@ def default_tool_registry() -> ToolRegistry:
     registry = ToolRegistry()
     for kind in ToolKind:
         registry.register(ManualReviewTool(kind))
+
+    registry.register(
+        SystemDesignEvaluator()
+    )
+    registry.register(
+        DocumentAnalysisEvaluator()
+    )
+    registry.register(
+        DataAnalysisEvaluator()
+    )
     return registry
