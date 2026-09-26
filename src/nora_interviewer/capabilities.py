@@ -30,6 +30,8 @@ class SystemCapabilities(StrictModel):
     storage_readiness: bool = True
     jwt_jwks_auth: bool = False
     organization_oidc_auth: bool = False
+    workload_jwt_auth: bool = False
+    hybrid_identity_auth: bool = False
     evidence_judge_ensemble: bool = False
     streaming_stt_enabled: bool = False
     streaming_stt_backend: str = "DisabledStreamingSpeechProvider"
@@ -99,7 +101,21 @@ def describe_capabilities(
         ),
         organization_oidc_auth=(
             type(principal_resolver).__name__
-            == "OrganizationOidcPrincipalResolver"
+            in {
+                "OrganizationOidcPrincipalResolver",
+                "CompositePrincipalResolver",
+            }
+        ),
+        workload_jwt_auth=(
+            type(principal_resolver).__name__
+            in {
+                "WorkloadJwtPrincipalResolver",
+                "CompositePrincipalResolver",
+            }
+        ),
+        hybrid_identity_auth=(
+            type(principal_resolver).__name__
+            == "CompositePrincipalResolver"
         ),
         interview_brain=type(service.brain).__name__,
         evidence_judge_enabled=(
