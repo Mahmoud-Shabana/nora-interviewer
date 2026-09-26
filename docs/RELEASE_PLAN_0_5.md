@@ -1,6 +1,6 @@
 # Nora v0.5.0 Development Plan
 
-Status: active — Gates 1–5 complete  
+Status: implementation complete; runtime verification deferred  
 Baseline: v0.4.0 release line  
 Current development line: main
 
@@ -91,11 +91,17 @@ No runtime tests or CI were executed for this gate because of the current accoun
 
 ## Gate 6 — Developer and deployment experience
 
-- [ ] deployment reference configuration
-- [ ] OIDC/object-store/sandbox examples
-- [ ] migration notes from v0.4
-- [ ] architecture and threat-boundary update
-- [ ] v0.5 changelog and release metadata reconciliation
+- [x] deployment reference configuration
+- [x] OIDC/object-store/sandbox examples
+- [x] migration notes from v0.4
+- [x] architecture and threat-boundary update
+- [x] v0.5 changelog and release metadata reconciliation
+
+### Gate 6 implementation notes
+
+The repository now includes a v0.5 deployment reference, concrete OIDC/artifact/sandbox environment examples, a v0.4-to-v0.5 migration guide, updated architecture/threat boundaries, and synchronized package/runtime/API/README/changelog metadata at `0.5.0`.
+
+All six implementation gates are complete. Runtime test execution and GitHub Actions were intentionally not run because of the current account constraint. The release state therefore records implementation/static-review completion with runtime verification explicitly deferred.
 
 ## Explicitly frozen unless a real gap appears
 
@@ -115,3 +121,17 @@ Do not rebuild:
 - operational SLO and Prometheus metrics
 
 Those are v0.4 capabilities and should only change for a concrete v0.5 dependency or defect.
+
+
+## Final v0.5 status
+
+- Gate 1 — Organization identity: complete
+- Gate 2 — Encrypted artifact storage: complete
+- Gate 3 — External sandbox service: complete
+- Gate 4 — Domain practical evaluators: complete
+- Gate 5 — Arabic technical interview depth: complete
+- Gate 6 — Developer and deployment experience: complete
+
+Package/runtime/API metadata: `0.5.0`
+
+Runtime verification: deferred by explicit account constraint; no pytest, GitHub Actions, or other test execution was run during this pass.
