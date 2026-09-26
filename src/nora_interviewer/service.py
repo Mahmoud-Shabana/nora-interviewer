@@ -88,7 +88,25 @@ class InterviewService:
         )
         self.counterfactual_replayer = CounterfactualReplayer()
 
-    async def create_job(self, job: JobSpec) -> JobSpec:
+    async def create_job(
+        self,
+        job: JobSpec,
+        *,
+        organization_id: str | None = None,
+    ) -> JobSpec:
+        if organization_id is not None:
+            if (
+                job.organization_id is not None
+                and job.organization_id != organization_id
+            ):
+                raise HTTPException(
+                    403,
+                    "Job organization does not match authenticated organization",
+                )
+            job = job.model_copy(
+                update={"organization_id": organization_id},
+            )
+
         for item in job.tool_templates:
             try:
                 self.tool_template_registry.get(item.template_id)
@@ -97,15 +115,32 @@ class InterviewService:
         await self.store.put_job(job)
         return job
 
-    async def create_session(self, request: CreateSession) -> InterviewSession:
+    async def create_session(
+        self,
+        request: CreateSession,
+        *,
+        organization_id: str | None = None,
+    ) -> InterviewSession:
         if not request.consent_to_ai_interview or not request.consent_to_transcript:
             raise HTTPException(400, "Explicit consent to the AI interview and transcript is required.")
         job = await self.store.get_job(request.job_id)
         if not job:
             raise HTTPException(404, "Job not found")
+        if organization_id is not None:
+            if job.organization_id is None:
+                raise HTTPException(
+                    403,
+                    "Organization-scoped identity cannot create a session for an unscoped job",
+                )
+            if job.organization_id != organization_id:
+                raise HTTPException(
+                    403,
+                    "Job belongs to a different organization",
+                )
         session = InterviewSession(
             job_id=job.id,
             candidate_ref=request.candidate_ref,
+            organization_id=job.organization_id,
             locale=request.locale,
             integrity_level=request.integrity_level,
         )
@@ -115,6 +150,7 @@ class InterviewService:
             EventType.SESSION_CREATED,
             payload={
                 "job_id": job.id,
+                "organization_id": session.organization_id,
                 "locale": session.locale,
                 "integrity_level": session.integrity_level.value,
             },
