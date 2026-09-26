@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 from time import monotonic
+from collections.abc import Mapping
 from typing import Callable
 
 from .models import StrictModel
@@ -19,6 +20,7 @@ class ProviderCircuitOpenError(RuntimeError):
 
 class ProviderResilienceSnapshot(StrictModel):
     provider_id: str
+    component: str | None = None
     state: CircuitState
     consecutive_failures: int
     total_failures: int
@@ -121,3 +123,100 @@ def retryable_http_status(
         }
         or status_code >= 500
     )
+
+
+def collect_provider_resilience(
+    components: Mapping[str, object],
+) -> list[ProviderResilienceSnapshot]:
+    snapshots: list[
+        ProviderResilienceSnapshot
+    ] = []
+    seen: set[int] = set()
+
+    def visit(
+        value: object,
+        path: str,
+    ) -> None:
+        if value is None:
+            return
+        identity = id(value)
+        if identity in seen:
+            return
+        seen.add(identity)
+
+        snapshot_fn = getattr(
+            value,
+            "resilience_snapshot",
+            None,
+        )
+        if callable(snapshot_fn):
+            snapshot = snapshot_fn()
+            if isinstance(
+                snapshot,
+                ProviderResilienceSnapshot,
+            ):
+                snapshots.append(
+                    snapshot.model_copy(
+                        update={
+                            "component": path
+                        }
+                    )
+                )
+
+        provider = getattr(
+            value,
+            "provider",
+            None,
+        )
+        if provider is not None:
+            visit(
+                provider,
+                path + ".provider",
+            )
+
+        primary = getattr(
+            value,
+            "primary",
+            None,
+        )
+        if primary is not None:
+            visit(
+                primary,
+                path + ".primary",
+            )
+
+        runner = getattr(
+            value,
+            "runner",
+            None,
+        )
+        if runner is not None:
+            visit(
+                runner,
+                path + ".runner",
+            )
+
+        judges = getattr(
+            value,
+            "judges",
+            None,
+        )
+        if isinstance(
+            judges,
+            (list, tuple),
+        ):
+            for index, judge in enumerate(
+                judges
+            ):
+                visit(
+                    judge,
+                    f"{path}.judges[{index}]",
+                )
+
+    for name, component in components.items():
+        visit(
+            component,
+            name,
+        )
+
+    return snapshots
