@@ -160,7 +160,7 @@ from .web import (
     render_review_console,
 )
 
-API_VERSION = "0.6.0-dev"
+API_VERSION = "0.6.0"
 
 store = build_webhook_store(
     build_store()
