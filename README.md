@@ -13,8 +13,8 @@
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white">
   <img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-blue.svg">
   <img alt="Status Alpha" src="https://img.shields.io/badge/Status-Alpha-orange">
-  <img alt="Release 0.4.0" src="https://img.shields.io/badge/Package-0.4.0-6f42c1">
-  <img alt="Main v0.4.0" src="https://img.shields.io/badge/main-v0.4.0-8A2BE2">
+  <img alt="Release 0.5.0" src="https://img.shields.io/badge/Package-0.5.0-6f42c1">
+  <img alt="Main v0.5.0" src="https://img.shields.io/badge/main-v0.5.0-8A2BE2">
   <img alt="CI" src="https://github.com/Mahmoud-Shabana/nora-interviewer/actions/workflows/ci.yml/badge.svg">
 </p>
 
@@ -58,8 +58,8 @@ It separates:
 
 | Area | Status |
 |---|---|
-| Package metadata | **0.4.0** |
-| Main branch | **v0.4.0 release line** |
+| Package metadata | **0.5.0** |
+| Main branch | **v0.5.0 release line** |
 | Core orchestration | ✅ Implemented |
 | Dual-lane interviewing | ✅ Implemented |
 | Candidate controls | ✅ Implemented |
@@ -1119,6 +1119,8 @@ Nora is intentionally conservative around high-stakes behavior.
 - [External Sandbox Service](docs/SANDBOX_SERVICE.md)
 - [Practical Evaluators](docs/PRACTICAL_EVALUATORS.md)
 - [Arabic Technical Interviews](docs/ARABIC_TECHNICAL_INTERVIEWS.md)
+- [v0.5 Deployment Reference](docs/DEPLOYMENT_0_5.md)
+- [Migrating v0.4 → v0.5](docs/MIGRATING_0_4_TO_0_5.md)
 - [Session Concurrency & ETags](docs/CONCURRENCY.md)
 - [Session Lifecycle](docs/SESSION_LIFECYCLE.md)
 - [Data Retention](docs/RETENTION.md)
@@ -1201,8 +1203,8 @@ Nora is intentionally conservative around high-stakes behavior.
 
 ## 🧭 Next
 
-- [ ] Organization-specific OIDC login/session integration
-- [ ] encrypted object storage
+- [x] Organization-specific OIDC login/session integration
+- [x] encrypted object storage
 - [x] external sandbox service
 - [x] richer domain-specific practical evaluators
 - [x] Arabic dialect and technical-ASR benchmarks
@@ -1235,6 +1237,10 @@ Before adding an automatic hiring signal, ask:
 Nora is research and infrastructure software.
 
 It should not be deployed as an autonomous hiring authority without appropriate technical validation, human oversight, consent, security controls, and legal review for the relevant jurisdiction.
+
+---
+
+> **Verification note for v0.5.0:** package/API/docs metadata are aligned at 0.5.0, but runtime test execution and GitHub Actions were intentionally not run during this release pass because of the current account constraint. Existing test infrastructure remains in the repository; this release line does not claim a fresh runtime pass.
 
 ---
 
