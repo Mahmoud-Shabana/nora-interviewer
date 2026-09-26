@@ -155,6 +155,11 @@ class RubricProvenance(StrictModel):
 
 class JobSpec(StrictModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
+    organization_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+    )
     title: str = Field(min_length=2)
     description: str = Field(min_length=5)
     competencies: list[Competency] = Field(min_length=1)
@@ -404,6 +409,11 @@ class InterviewSession(StrictModel):
     cancellation_reason: str | None = Field(default=None, max_length=2000)
     job_id: str
     candidate_ref: str
+    organization_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+    )
     locale: str
     integrity_level: IntegrityLevel = IntegrityLevel.NONE
     status: SessionStatus = SessionStatus.CREATED
