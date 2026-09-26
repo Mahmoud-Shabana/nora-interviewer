@@ -1,6 +1,6 @@
 # Nora v0.6.0 Development Plan
 
-Status: active — Gates 1–5 complete  
+Status: implementation complete; runtime verification deferred  
 Baseline: v0.5.0 release line  
 Current development line: main
 
@@ -84,8 +84,28 @@ No runtime tests or CI were executed; completion refers to implementation and st
 
 ## Gate 6 — Release preparation
 
-- [ ] v0.6 deployment reference
-- [ ] v0.5 → v0.6 migration notes
-- [ ] architecture/threat-boundary update
-- [ ] changelog reconciliation
-- [ ] package/runtime/API metadata reconciliation
+- [x] v0.6 deployment reference
+- [x] v0.5 → v0.6 migration notes
+- [x] architecture/threat-boundary update
+- [x] changelog reconciliation
+- [x] package/runtime/API metadata reconciliation
+
+
+### Gate 6 implementation notes
+
+The repository now includes a v0.6 deployment reference, v0.5-to-v0.6 migration guide, updated integration/threat boundaries, and synchronized package/runtime/API/README/changelog metadata at `0.6.0`.
+
+All six v0.6 implementation gates are complete. Runtime test execution and GitHub Actions were intentionally not run because of the current account constraint.
+
+## Final v0.6 status
+
+- Gate 1 — Managed artifact storage: complete
+- Gate 2 — Workload/service identity: complete
+- Gate 3 — Outbound webhooks: complete
+- Gate 4 — Provider resilience: complete
+- Gate 5 — Evidence portability: complete
+- Gate 6 — Release preparation: complete
+
+Package/runtime/API metadata: `0.6.0`
+
+Runtime verification: deferred by explicit account constraint; no pytest, GitHub Actions, or other test execution was run during this pass.
