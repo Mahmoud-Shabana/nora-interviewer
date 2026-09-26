@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 import os
 
+from .authorization import ActorRole
 from .authn import (
     DisabledPrincipalResolver,
     DevHeaderPrincipalResolver,
     JwtJwksPrincipalResolver,
+    OrganizationOidcPrincipalResolver,
 )
 from .evidence_ensemble import EvidenceJudgeEnsemble
 from .evidence_judge import DisabledEvidenceJudge, LLMEvidenceJudge
@@ -217,6 +220,10 @@ def build_principal_resolver():
     dev-header:
         Development-only role simulation through X-Nora-* headers.
         Do not use this mode as a production authentication mechanism.
+
+    oidc:
+        Organization-scoped OpenID Connect bearer tokens with trusted
+        issuer/audience validation and group-to-role mapping.
     """
 
     mode = os.getenv(
@@ -229,6 +236,144 @@ def build_principal_resolver():
 
     if mode == "dev-header":
         return DevHeaderPrincipalResolver()
+
+    if mode == "oidc":
+        jwks_url = os.getenv(
+            "NORA_OIDC_JWKS_URL",
+            "",
+        ).strip()
+        issuer = os.getenv(
+            "NORA_OIDC_ISSUER",
+            "",
+        ).strip()
+        audience = os.getenv(
+            "NORA_OIDC_AUDIENCE",
+            "",
+        ).strip()
+        organization_id = os.getenv(
+            "NORA_OIDC_ORGANIZATION_ID",
+            "",
+        ).strip()
+        raw_role_mapping = os.getenv(
+            "NORA_OIDC_ROLE_MAPPING",
+            "",
+        ).strip()
+        algorithms = tuple(
+            item.strip()
+            for item in os.getenv(
+                "NORA_OIDC_ALGORITHMS",
+                "RS256",
+            ).split(",")
+            if item.strip()
+        )
+        allow_insecure_jwks = os.getenv(
+            "NORA_OIDC_ALLOW_INSECURE_JWKS",
+            "false",
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        candidate_ref_from_subject = os.getenv(
+            "NORA_OIDC_CANDIDATE_REF_FROM_SUBJECT",
+            "true",
+        ).strip().lower() in {"1", "true", "yes", "on"}
+
+        if (
+            not jwks_url
+            or not issuer
+            or not audience
+            or not organization_id
+            or not raw_role_mapping
+        ):
+            raise RuntimeError(
+                "NORA_OIDC_JWKS_URL, NORA_OIDC_ISSUER, "
+                "NORA_OIDC_AUDIENCE, NORA_OIDC_ORGANIZATION_ID, and "
+                "NORA_OIDC_ROLE_MAPPING are required in oidc mode"
+            )
+        if (
+            not jwks_url.startswith("https://")
+            and not allow_insecure_jwks
+        ):
+            raise RuntimeError(
+                "NORA_OIDC_JWKS_URL must use https:// unless "
+                "NORA_OIDC_ALLOW_INSECURE_JWKS=true"
+            )
+
+        try:
+            raw_mapping = json.loads(raw_role_mapping)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "NORA_OIDC_ROLE_MAPPING must be a JSON object"
+            ) from exc
+        if not isinstance(raw_mapping, dict):
+            raise RuntimeError(
+                "NORA_OIDC_ROLE_MAPPING must be a JSON object"
+            )
+
+        role_mapping = {}
+        for external, role_name in raw_mapping.items():
+            if not isinstance(external, str) or not isinstance(
+                role_name,
+                str,
+            ):
+                raise RuntimeError(
+                    "NORA_OIDC_ROLE_MAPPING keys and values must be strings"
+                )
+            try:
+                role_mapping[external] = ActorRole(
+                    role_name.strip().lower()
+                )
+            except ValueError as exc:
+                raise RuntimeError(
+                    "NORA_OIDC_ROLE_MAPPING contains an unknown Nora role"
+                ) from exc
+
+        try:
+            leeway_seconds = float(
+                os.getenv(
+                    "NORA_OIDC_LEEWAY_SECONDS",
+                    "30",
+                )
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                "NORA_OIDC_LEEWAY_SECONDS must be numeric"
+            ) from exc
+        if leeway_seconds < 0 or leeway_seconds > 300:
+            raise RuntimeError(
+                "NORA_OIDC_LEEWAY_SECONDS must be between 0 and 300"
+            )
+
+        try:
+            return OrganizationOidcPrincipalResolver(
+                jwks_url=jwks_url,
+                issuer=issuer,
+                audience=audience,
+                organization_id=organization_id,
+                organization_claim=os.getenv(
+                    "NORA_OIDC_ORGANIZATION_CLAIM",
+                    "org_id",
+                ).strip() or "org_id",
+                groups_claim=os.getenv(
+                    "NORA_OIDC_GROUPS_CLAIM",
+                    "groups",
+                ).strip() or "groups",
+                role_mapping=role_mapping,
+                algorithms=algorithms,
+                principal_claim=os.getenv(
+                    "NORA_OIDC_PRINCIPAL_CLAIM",
+                    "sub",
+                ).strip() or "sub",
+                candidate_ref_claim=os.getenv(
+                    "NORA_OIDC_CANDIDATE_REF_CLAIM",
+                    "candidate_ref",
+                ).strip() or "candidate_ref",
+                candidate_ref_from_subject=(
+                    candidate_ref_from_subject
+                ),
+                leeway_seconds=leeway_seconds,
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Invalid OIDC configuration: {exc}"
+            ) from exc
 
     if mode == "jwt-jwks":
         jwks_url = os.getenv(
