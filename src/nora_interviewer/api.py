@@ -150,7 +150,7 @@ from .web import (
     render_review_console,
 )
 
-API_VERSION = "0.5.0-dev"
+API_VERSION = "0.5.0"
 
 store = build_store()
 artifact_store = build_artifact_store()
