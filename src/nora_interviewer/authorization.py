@@ -51,6 +51,7 @@ class Permission(str, Enum):
     CREATE_ARTIFACT = "create_artifact"
     READ_ARTIFACT = "read_artifact"
     DELETE_ARTIFACT = "delete_artifact"
+    EXPORT_EVIDENCE_BUNDLE = "export_evidence_bundle"
 
 
 class Principal(StrictModel):
@@ -82,6 +83,7 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.CREATE_ARTIFACT,
         Permission.READ_ARTIFACT,
         Permission.DELETE_ARTIFACT,
+        Permission.EXPORT_EVIDENCE_BUNDLE,
     },
     ActorRole.RECRUITER: {
         Permission.CREATE_JOB,
@@ -107,6 +109,7 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.CANCEL_REVIEW_ASSIGNMENT,
         Permission.READ_ARTIFACT,
         Permission.DELETE_ARTIFACT,
+        Permission.EXPORT_EVIDENCE_BUNDLE,
     },
     ActorRole.REVIEWER: {
         Permission.READ_SESSION,
@@ -125,6 +128,7 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.REEVALUATE_EVIDENCE,
         Permission.WORK_REVIEW_ASSIGNMENT,
         Permission.READ_ARTIFACT,
+        Permission.EXPORT_EVIDENCE_BUNDLE,
     },
     ActorRole.SERVICE: set(Permission),
 }
