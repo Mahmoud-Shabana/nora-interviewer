@@ -299,3 +299,173 @@ class JwtJwksPrincipalResolver:
         token = self._bearer_token(headers)
         claims = self._decode_token(token)
         return self._claims_to_principal(claims)
+
+
+
+class OrganizationOidcPrincipalResolver(JwtJwksPrincipalResolver):
+    """OIDC resolver with deployment-scoped organization and group mapping.
+
+    The identity provider owns authentication. Nora maps trusted OIDC claims
+    into its small internal role model without requiring a Nora-specific role
+    claim to be minted by the provider.
+    """
+
+    def __init__(
+        self,
+        *,
+        jwks_url: str,
+        issuer: str,
+        audience: str,
+        organization_id: str,
+        organization_claim: str = "org_id",
+        groups_claim: str = "groups",
+        role_mapping: Mapping[str, ActorRole],
+        algorithms: tuple[str, ...] = ("RS256",),
+        principal_claim: str = "sub",
+        candidate_ref_claim: str = "candidate_ref",
+        candidate_ref_from_subject: bool = True,
+        leeway_seconds: float = 30.0,
+    ) -> None:
+        organization_id = organization_id.strip()
+        organization_claim = organization_claim.strip()
+        groups_claim = groups_claim.strip()
+        if not organization_id:
+            raise ValueError("organization_id is required")
+        if not organization_claim:
+            raise ValueError("organization_claim is required")
+        if not groups_claim:
+            raise ValueError("groups_claim is required")
+        if not role_mapping:
+            raise ValueError("role_mapping must not be empty")
+
+        normalized_mapping: dict[str, ActorRole] = {}
+        for external, role in role_mapping.items():
+            key = str(external).strip()
+            if not key:
+                raise ValueError(
+                    "OIDC role mapping contains an empty external value"
+                )
+            if role is ActorRole.SERVICE:
+                raise ValueError(
+                    "OIDC role mapping cannot grant the service role"
+                )
+            normalized_mapping[key] = role
+
+        super().__init__(
+            jwks_url=jwks_url,
+            issuer=issuer,
+            audience=audience,
+            algorithms=algorithms,
+            principal_claim=principal_claim,
+            role_claim="__oidc_mapped_role__",
+            candidate_ref_claim=candidate_ref_claim,
+            leeway_seconds=leeway_seconds,
+            allow_service_role=False,
+        )
+        self.organization_id = organization_id
+        self.organization_claim = organization_claim
+        self.groups_claim = groups_claim
+        self.role_mapping = normalized_mapping
+        self.candidate_ref_from_subject = candidate_ref_from_subject
+
+    @staticmethod
+    def _claim_values(value: object) -> list[str]:
+        if isinstance(value, str):
+            return [
+                item.strip()
+                for item in value.split(",")
+                if item.strip()
+            ]
+        if isinstance(value, (list, tuple, set)):
+            return [
+                item.strip()
+                for item in value
+                if isinstance(item, str) and item.strip()
+            ]
+        return []
+
+    def _claims_to_principal(
+        self,
+        claims: Mapping[str, object],
+    ) -> Principal:
+        organization = claims.get(self.organization_claim)
+        organization_values = self._claim_values(organization)
+        if self.organization_id not in organization_values:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Bearer token is not scoped to the configured "
+                    "Nora organization"
+                ),
+            )
+
+        external_groups = self._claim_values(
+            claims.get(self.groups_claim)
+        )
+        mapped_roles = {
+            self.role_mapping[group]
+            for group in external_groups
+            if group in self.role_mapping
+        }
+        if not mapped_roles:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Bearer token groups do not map to a Nora role"
+                ),
+            )
+        if len(mapped_roles) > 1:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Bearer token maps to multiple Nora roles; "
+                    "role mapping must be unambiguous"
+                ),
+            )
+
+        principal_id = claims.get(self.principal_claim)
+        if not isinstance(principal_id, str) or not principal_id.strip():
+            raise HTTPException(
+                status_code=401,
+                detail=(
+                    "Bearer token is missing the configured "
+                    f"principal claim {self.principal_claim!r}"
+                ),
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        role = next(iter(mapped_roles))
+        candidate_ref_value = claims.get(
+            self.candidate_ref_claim
+        )
+        candidate_ref = (
+            candidate_ref_value.strip()
+            if isinstance(candidate_ref_value, str)
+            and candidate_ref_value.strip()
+            else None
+        )
+        if (
+            role is ActorRole.CANDIDATE
+            and candidate_ref is None
+            and self.candidate_ref_from_subject
+        ):
+            candidate_ref = principal_id.strip()
+
+        if (
+            role is ActorRole.CANDIDATE
+            and candidate_ref is None
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Candidate OIDC identity does not provide a stable "
+                    "candidate reference"
+                ),
+            )
+
+        return Principal(
+            id=principal_id.strip(),
+            role=role,
+            candidate_ref=candidate_ref,
+            organization_id=self.organization_id,
+        )
