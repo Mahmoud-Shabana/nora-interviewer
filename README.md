@@ -88,6 +88,7 @@ It separates:
 | Encrypted artifact storage | ✅ Encrypted local provider + signed access |
 | External sandbox service | ✅ `nora.sandbox.v1` remote runner |
 | Domain practical evaluators | ✅ Coding + system design + document + data analysis |
+| Arabic technical interview depth | ✅ Dialect metadata + code-switch + ASR preservation export |
 
 ---
 
@@ -1117,6 +1118,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Encrypted Artifact Storage](docs/ARTIFACT_STORAGE.md)
 - [External Sandbox Service](docs/SANDBOX_SERVICE.md)
 - [Practical Evaluators](docs/PRACTICAL_EVALUATORS.md)
+- [Arabic Technical Interviews](docs/ARABIC_TECHNICAL_INTERVIEWS.md)
 - [Session Concurrency & ETags](docs/CONCURRENCY.md)
 - [Session Lifecycle](docs/SESSION_LIFECYCLE.md)
 - [Data Retention](docs/RETENTION.md)
@@ -1203,7 +1205,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [ ] encrypted object storage
 - [x] external sandbox service
 - [x] richer domain-specific practical evaluators
-- [ ] Arabic dialect and technical-ASR benchmarks
+- [x] Arabic dialect and technical-ASR benchmarks
 
 ---
 
