@@ -1,6 +1,6 @@
 # Nora v0.5.0 Development Plan
 
-Status: planned  
+Status: active — Gate 1 complete  
 Baseline: v0.4.0 release line  
 Current development line: main
 
@@ -17,11 +17,17 @@ This plan starts only after the v0.4.0 metadata/docs freeze. It must avoid reope
 
 ## Gate 1 — Organization identity
 
-- [ ] organization-specific OIDC login/session integration
-- [ ] issuer/audience/provider configuration per deployment
-- [ ] mapped organization roles and recruiter/reviewer claims
-- [ ] session ownership continuity across authenticated clients
-- [ ] security and deployment documentation
+- [x] organization-specific OIDC login/session integration
+- [x] issuer/audience/provider configuration per deployment
+- [x] mapped organization roles and recruiter/reviewer claims
+- [x] session ownership continuity across authenticated clients
+- [x] security and deployment documentation
+
+### Gate 1 implementation notes
+
+Organization OIDC now validates deployment-scoped issuer/audience/JWKS settings, verifies the organization claim, maps trusted identity-provider groups into Nora roles, carries organization identity on principals, and propagates organization scope through jobs, rubric drafts, sessions, review queues, and evidence-reevaluation queues. Session authorization rejects cross-organization access before candidate ownership checks.
+
+No runtime tests or CI were executed for this gate because of the current account constraint; completion here refers to implementation and static contract review.
 
 ## Gate 2 — Encrypted artifact storage
 
