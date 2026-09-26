@@ -146,7 +146,7 @@ from .web import (
     render_review_console,
 )
 
-API_VERSION = "0.4.0-dev"
+API_VERSION = "0.5.0-dev"
 
 store = build_store()
 service = InterviewService(
@@ -494,7 +494,8 @@ async def draft_rubric(
     )
     try:
         return await rubric_service.draft(
-            request
+            request,
+            organization_id=principal.organization_id,
         )
     except RubricDraftError as exc:
         raise HTTPException(
@@ -516,7 +517,8 @@ async def get_rubric_draft(
         Permission.READ_RUBRIC_DRAFT,
     )
     return await rubric_service.get(
-        draft_id
+        draft_id,
+        organization_id=principal.organization_id,
     )
 
 
@@ -537,6 +539,7 @@ async def approve_rubric(
         draft_id,
         request,
         approved_by=principal.id,
+        organization_id=principal.organization_id,
     )
 
 
@@ -566,7 +569,9 @@ async def review_summary(
         principal,
         Permission.READ_REVIEW_QUEUE,
     )
-    return await review_service.summary()
+    return await review_service.summary(
+        organization_id=principal.organization_id,
+    )
 
 
 @app.get(
@@ -583,6 +588,7 @@ async def evidence_reevaluation_queue(
     )
     return await review_service.evidence_reevaluation_queue(
         job_id=job_id,
+        organization_id=principal.organization_id,
     )
 
 
@@ -602,6 +608,7 @@ async def review_queue(
     return await review_service.queue(
         requires_review_only=requires_review_only,
         job_id=job_id,
+        organization_id=principal.organization_id,
     )
 
 
@@ -760,7 +767,10 @@ async def create_job(
         principal,
         Permission.CREATE_JOB,
     )
-    return await service.create_job(job)
+    return await service.create_job(
+        job,
+        organization_id=principal.organization_id,
+    )
 
 
 @app.post("/v1/sessions", response_model=InterviewSession, status_code=201)
@@ -772,7 +782,10 @@ async def create_session(
         principal,
         Permission.CREATE_SESSION,
     )
-    return await service.create_session(request)
+    return await service.create_session(
+        request,
+        organization_id=principal.organization_id,
+    )
 
 
 @app.post(
