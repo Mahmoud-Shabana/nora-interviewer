@@ -48,6 +48,9 @@ class Permission(str, Enum):
     ASSIGN_REVIEW = "assign_review"
     WORK_REVIEW_ASSIGNMENT = "work_review_assignment"
     CANCEL_REVIEW_ASSIGNMENT = "cancel_review_assignment"
+    CREATE_ARTIFACT = "create_artifact"
+    READ_ARTIFACT = "read_artifact"
+    DELETE_ARTIFACT = "delete_artifact"
 
 
 class Principal(StrictModel):
@@ -76,6 +79,9 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.SUBMIT_TOOL,
         Permission.READ_SESSION,
         Permission.USE_VOICE,
+        Permission.CREATE_ARTIFACT,
+        Permission.READ_ARTIFACT,
+        Permission.DELETE_ARTIFACT,
     },
     ActorRole.RECRUITER: {
         Permission.CREATE_JOB,
@@ -99,6 +105,8 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.APPROVE_RUBRIC,
         Permission.ASSIGN_REVIEW,
         Permission.CANCEL_REVIEW_ASSIGNMENT,
+        Permission.READ_ARTIFACT,
+        Permission.DELETE_ARTIFACT,
     },
     ActorRole.REVIEWER: {
         Permission.READ_SESSION,
@@ -116,6 +124,7 @@ _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
         Permission.EXPORT_REVIEW_BUNDLE,
         Permission.REEVALUATE_EVIDENCE,
         Permission.WORK_REVIEW_ASSIGNMENT,
+        Permission.READ_ARTIFACT,
     },
     ActorRole.SERVICE: set(Permission),
 }
