@@ -20,6 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 auth = ["PyJWT[crypto]>=2.14,<3"]
 artifacts = ["cryptography>=43,<48"]
+s3 = ["boto3>=1.35,<2"]
 voice = ["websockets>=14,<16"]
 postgres = [
   "psycopg[binary]>=3.2,<4",
