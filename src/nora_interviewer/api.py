@@ -8,8 +8,6 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, 
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from .artifact_service import ArtifactService
-from .artifact_storage import ArtifactStorageError
 from .audio_stream_manager import AudioStreamManager
 from .authorization import AccessPolicy, Permission, Principal
 from .capabilities import SystemCapabilities, describe_capabilities
@@ -491,6 +489,7 @@ async def system_capabilities(
         streaming_speech_provider=streaming_speech_provider,
         streaming_tts_provider=streaming_tts_provider,
         rubric_drafter=rubric_drafter,
+        artifact_store=artifact_store,
     )
 
 
@@ -820,7 +819,17 @@ async def create_artifact(
         principal,
         Permission.CREATE_ARTIFACT,
     )
-    data = await request.body()
+    chunks: list[bytes] = []
+    total_bytes = 0
+    async for chunk in request.stream():
+        total_bytes += len(chunk)
+        if total_bytes > artifact_service.max_artifact_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail="Artifact exceeds configured size limit",
+            )
+        chunks.append(chunk)
+    data = b"".join(chunks)
     return await artifact_service.create(
         session_id,
         data=data,
