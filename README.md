@@ -87,6 +87,7 @@ It separates:
 | Organization-scoped OIDC | ✅ Implemented on v0.5 development line |
 | Encrypted artifact storage | ✅ Encrypted local provider + signed access |
 | External sandbox service | ✅ `nora.sandbox.v1` remote runner |
+| Domain practical evaluators | ✅ Coding + system design + document + data analysis |
 
 ---
 
@@ -1115,6 +1116,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Storage Backends](docs/STORAGE.md)
 - [Encrypted Artifact Storage](docs/ARTIFACT_STORAGE.md)
 - [External Sandbox Service](docs/SANDBOX_SERVICE.md)
+- [Practical Evaluators](docs/PRACTICAL_EVALUATORS.md)
 - [Session Concurrency & ETags](docs/CONCURRENCY.md)
 - [Session Lifecycle](docs/SESSION_LIFECYCLE.md)
 - [Data Retention](docs/RETENTION.md)
@@ -1200,7 +1202,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [ ] Organization-specific OIDC login/session integration
 - [ ] encrypted object storage
 - [x] external sandbox service
-- [ ] richer domain-specific practical evaluators
+- [x] richer domain-specific practical evaluators
 - [ ] Arabic dialect and technical-ASR benchmarks
 
 ---
