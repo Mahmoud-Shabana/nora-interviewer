@@ -11,7 +11,9 @@ flowchart TB
     Brain[Interview Brain]
     Judge[Independent Evidence Judge]
     Tools[Practical Tool Layer]
-    Sandbox[Sandbox / External Tool Boundary]
+    Sandbox[Remote Sandbox / Local Dev Boundary]
+    Artifact[Encrypted Artifact Object Store]
+    Identity[Organization OIDC / JWT Identity]
     Evidence[Skill Evidence Graph]
     Store[Store: Memory / SQLite / PostgreSQL]
     Audit[Tamper-Evident Event Chain]
@@ -22,7 +24,8 @@ flowchart TB
     Export[VoxRubric Export]
     Vox[VoxRubric]
 
-    Client --> API
+    Client --> Identity
+    Identity --> API
     API --> Session
     Session --> Planner
     Session --> Brain
@@ -36,6 +39,7 @@ flowchart TB
     Tools --> Evidence
     Session --> Evidence
     Session --> Store
+    Session --> Artifact
     Evidence --> Store
     Session --> Audit
     Voice --> Audit
@@ -181,3 +185,63 @@ The following components are deliberately replaceable:
 - external evaluation pipeline
 
 Production deployments should additionally provide encrypted object storage, dedicated hostile-code sandboxing, secret management, rate limiting, audit-access controls, jurisdiction-specific retention policy, and organization-specific identity integration.
+
+
+## Threat boundaries
+
+Nora v0.5 makes several trust boundaries explicit.
+
+### Identity boundary
+
+OIDC/JWT verification authenticates a principal, while `AccessPolicy` authorizes operations. Organization identity is carried into jobs, rubric drafts, and sessions. A valid role from one organization does not authorize access to another organization's session.
+
+The internal `service` role is not grantable through organization OIDC.
+
+### Artifact boundary
+
+Binary candidate artifacts are separated from the session document through `ArtifactObjectStore`.
+
+The built-in local provider encrypts objects with AES-256-GCM and binds storage key/content type as associated data. Session state stores metadata/checksums, not plaintext binary payloads. Signed access tokens are short-lived bearer credentials and are separate from the encryption key.
+
+### Sandbox boundary
+
+Candidate code is not executed by the FastAPI process. Production-oriented deployments use `nora.sandbox.v1` to dispatch to an independent sandbox service with explicit CPU, memory, process, timeout, network, filesystem, and privilege policy.
+
+A sandbox transport failure becomes a manual-review state, not a candidate failure.
+
+### Model boundary
+
+The Interview Brain proposes interview actions but does not own IDs, authorization, session persistence, evidence state, tool policy, or the final hiring decision.
+
+The Evidence Judge is independently configurable and cannot upgrade transcript-only evidence to verified evidence.
+
+### Language boundary
+
+Arabic dialect and code-switch metadata describe transcript behavior only. Nora does not treat dialect, accent, nationality, or language prestige as hiring evidence.
+
+### Operational boundary
+
+Operations/SLO metrics intentionally avoid high-cardinality candidate, session, turn, transcript, or artifact identifiers in metric labels.
+
+### Human-decision boundary
+
+Structured practical evaluators may validate deliverables and record provenance, but document/data/system-design evaluators do not produce an automatic hiring score. Integrity signals also remain human-review inputs.
+
+## v0.5 data flow
+
+```mermaid
+flowchart LR
+    IdP[OIDC Identity Provider] --> API[Nora API]
+    API --> DB[(PostgreSQL / Store)]
+    API --> Obj[Encrypted Artifact Store]
+    API --> SB[Remote Sandbox]
+    API --> STT[STT Provider]
+    API --> TTS[TTS Provider]
+    API --> Brain[Interview Brain]
+    API --> Judge[Evidence Judge]
+    DB --> Export[VoxRubric Trace]
+    Obj -. provenance .-> DB
+    SB -. execution provenance .-> DB
+    STT -. language metadata .-> DB
+    Export --> Vox[VoxRubric]
+```
