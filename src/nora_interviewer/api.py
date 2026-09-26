@@ -60,6 +60,7 @@ from .models import (
     ReviewAssignment,
     SessionStep,
     ToolInvocation,
+    ToolKind,
     ToolStep,
     ToolSubmissionRequest,
     TranscriptCorrectionRequest,
@@ -67,6 +68,10 @@ from .models import (
     VoxRubricTrace,
 )
 from .replay import ReplayState
+from .resilience import (
+    ProviderResilienceSnapshot,
+    collect_provider_resilience,
+)
 from .review import (
     EvidenceReevaluationQueueItem,
     RecruiterSessionReport,
@@ -456,6 +461,36 @@ async def operational_metrics(
         headers={
             "Cache-Control": "no-store",
         },
+    )
+
+
+@app.get(
+    "/v1/system/resilience",
+    response_model=list[ProviderResilienceSnapshot],
+)
+async def provider_resilience_status(
+    principal: Principal = Depends(current_principal),
+) -> list[ProviderResilienceSnapshot]:
+    require_global_permission(
+        principal,
+        Permission.READ_SYSTEM,
+    )
+    components = {
+        "interview_brain": service.brain,
+        "evidence_judge": service.evidence_judge,
+        "rubric_drafter": rubric_drafter,
+    }
+    try:
+        components["coding_tool"] = (
+            service.tool_registry.get(
+                ToolKind.CODING
+            )
+        )
+    except ValueError:
+        pass
+
+    return collect_provider_resilience(
+        components
     )
 
 
