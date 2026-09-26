@@ -28,6 +28,10 @@ from .config import (
     build_webhook_store,
 )
 from .counterfactual import CounterfactualReplayReport
+from .evidence_bundle import (
+    PortableEvidenceBundle,
+    build_portable_evidence_bundle,
+)
 from .feedback import CandidateFeedbackReport
 from .http_metrics import HttpRequestMetrics
 from .operations import (
@@ -786,6 +790,37 @@ async def recruiter_session_report(
         Permission.READ_RECRUITER_REPORT,
     )
     return await review_service.session_report(session_id)
+
+
+@app.get(
+    "/v1/sessions/{session_id}/evidence-bundle",
+    response_model=PortableEvidenceBundle,
+)
+async def portable_evidence_bundle(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> PortableEvidenceBundle:
+    session = await require_session_permission(
+        session_id,
+        principal,
+        Permission.EXPORT_EVIDENCE_BUNDLE,
+    )
+    job = await store.get_job(
+        session.job_id
+    )
+    if job is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Session references a missing job",
+        )
+    trace = await service.export_voxrubric(
+        session_id
+    )
+    return build_portable_evidence_bundle(
+        session=session,
+        job=job,
+        trace=trace,
+    )
 
 
 @app.get(
