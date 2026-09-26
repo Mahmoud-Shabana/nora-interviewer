@@ -246,4 +246,35 @@ def default_tool_template_registry(
         )
     )
 
+
+    registry.register(
+        StaticToolTemplate(
+            template_id="data-analysis-service-latency-v1",
+            kind=ToolKind.DATASET,
+            title="Service latency analysis",
+            description=(
+                "A data-analysis exercise focused on assumptions, "
+                "calculation transparency, validation, and operational interpretation."
+            ),
+            instructions=(
+                "Analyze the supplied service-latency dataset. Explain the method, "
+                "state assumptions, show the calculations needed for the result, "
+                "identify at least one validation check, and summarize what the "
+                "result does and does not support."
+            ),
+            payload={
+                "dataset_type": "service_latency",
+                "deliverables": [
+                    "analysis",
+                    "assumptions",
+                    "result",
+                    "validation",
+                ],
+                "optional_deliverables": [
+                    "calculations",
+                ],
+            },
+        )
+    )
+
     return registry
