@@ -10,7 +10,7 @@ Authorization answers:
 
 > What is that principal allowed to do to this resource?
 
-The current main branch implements the authorization policy and three principal resolvers: local disabled mode, development header mode, and production-oriented JWT/JWKS mode.
+The current main branch implements the authorization policy and four principal resolvers/modes: local disabled mode, development header mode, production-oriented JWT/JWKS mode, and organization-scoped OIDC mode.
 
 ## Roles
 
@@ -123,6 +123,48 @@ This mode exists for local integration testing only.
 
 Client-controlled role headers are **not** a production authentication mechanism.
 
+
+## Organization OIDC mode
+
+For organization-scoped deployments:
+
+```bash
+NORA_AUTH_MODE=oidc
+NORA_OIDC_JWKS_URL=https://identity.example/.well-known/jwks.json
+NORA_OIDC_ISSUER=https://identity.example/
+NORA_OIDC_AUDIENCE=https://api.nora.example
+NORA_OIDC_ORGANIZATION_ID=acme
+NORA_OIDC_ORGANIZATION_CLAIM=org_id
+NORA_OIDC_GROUPS_CLAIM=groups
+NORA_OIDC_ROLE_MAPPING='{"acme-candidates":"candidate","acme-recruiters":"recruiter","acme-reviewers":"reviewer"}'
+```
+
+Optional settings:
+
+```bash
+NORA_OIDC_PRINCIPAL_CLAIM=sub
+NORA_OIDC_CANDIDATE_REF_CLAIM=candidate_ref
+NORA_OIDC_CANDIDATE_REF_FROM_SUBJECT=true
+NORA_OIDC_ALGORITHMS=RS256
+NORA_OIDC_LEEWAY_SECONDS=30
+```
+
+The resolver validates the configured issuer, audience, signature, expiry, organization claim, and asymmetric algorithm before mapping identity-provider groups to Nora roles.
+
+Security boundaries:
+
+- the configured organization must be present in the trusted organization claim;
+- external groups map only to `candidate`, `recruiter`, or `reviewer`;
+- OIDC mappings cannot grant Nora's internal `service` role;
+- ambiguous mappings that resolve one identity to multiple Nora roles are rejected;
+- candidate identities use the configured candidate reference claim, or the stable subject claim when explicitly enabled;
+- jobs, rubric drafts, approved rubric jobs, interview sessions, review summaries, review queues, and evidence-reevaluation queues inherit organization scope;
+- session authorization rejects principals from another organization before role-specific candidate ownership checks;
+- organization-scoped identities cannot create a session for an unscoped or differently scoped job;
+- cross-organization rubric draft lookup is returned as not found.
+
+The service principal remains the internal administrative boundary and is not issued through organization OIDC.
+
 ## JWT / JWKS mode
 
 For production-oriented Bearer token validation:
@@ -176,11 +218,10 @@ pip install -e '.[auth]'
 
 ## Production direction
 
-The JWT/JWKS resolver provides a production-capable token validation boundary, but deployments still need organization-specific identity lifecycle, key rotation policy, claim issuance, and account administration.
+The JWT/JWKS and organization OIDC resolvers provide production-oriented token validation boundaries. Deployments still own identity lifecycle, IdP key rotation policy, group administration, invitation/account provisioning, and incident response.
 
 Future adapters can include:
 
-- organization SSO session gateways;
 - workload identity/service credentials;
 - signed candidate invitation tokens.
 
