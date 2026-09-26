@@ -4,7 +4,7 @@ All notable Nora Interviewer development changes are documented here.
 
 The project is currently alpha-stage. The main branch can contain features that are newer than the latest package metadata.
 
-## Unreleased — v0.4 development
+## 0.4.0 — 2026-09-26
 
 ### Interview orchestration
 
@@ -95,6 +95,20 @@ The project is currently alpha-stage. The main branch can contain features that 
 - Added storage backend design.
 - Added retention lifecycle documentation.
 - Redesigned README as a full project landing page.
+
+### Release hardening
+
+- Added PostgreSQL multi-instance persistence with optimistic compare-and-swap.
+- Added REST ETag / If-Match concurrency protection.
+- Added explicit cancelled-session lifecycle with practical-tool and realtime-voice cleanup.
+- Added signed JWT/JWKS authentication and authorization boundaries.
+- Added tamper-evident SHA-256 audit-chain sealing and independent export verification.
+- Added server streaming STT/TTS, browser STT reconnect/resume, VAD endpointing, and provider circuit breakers.
+- Added audited server/browser voice fallback telemetry.
+- Added privacy-minimized operational snapshots, Prometheus-compatible metrics, and operational SLO assessment.
+- Added Job & Rubric Studio with AI-assisted drafts and explicit recruiter approval.
+- Added deterministic end-to-end release-flow and failure/recovery regression coverage.
+- Synchronized release architecture and project status documentation for v0.4.0.
 
 ## 0.3.0
 
