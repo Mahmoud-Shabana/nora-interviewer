@@ -43,6 +43,10 @@ class SystemCapabilities(StrictModel):
     rubric_draft_persistence: bool = True
     rubric_human_approval: bool = True
     job_rubric_provenance: bool = True
+    artifact_storage_enabled: bool = False
+    artifact_storage_backend: str = "disabled"
+    artifact_encrypted_at_rest: bool = False
+    artifact_signed_access: bool = False
     voxrubric_export: bool = True
 
 
@@ -55,6 +59,7 @@ def describe_capabilities(
     streaming_speech_provider=None,
     streaming_tts_provider=None,
     rubric_drafter=None,
+    artifact_store=None,
 ) -> SystemCapabilities:
     judge = service.evidence_judge
     judge_backend = type(judge).__name__
@@ -116,6 +121,38 @@ def describe_capabilities(
             rubric_drafter_backend != "DisabledRubricDrafter"
         ),
         rubric_drafter_backend=rubric_drafter_backend,
+        artifact_storage_enabled=(
+            artifact_store is not None
+            and getattr(
+                artifact_store,
+                "provider_id",
+                "disabled",
+            ) != "disabled"
+        ),
+        artifact_storage_backend=(
+            getattr(
+                artifact_store,
+                "provider_id",
+                "disabled",
+            )
+            if artifact_store is not None
+            else "disabled"
+        ),
+        artifact_encrypted_at_rest=bool(
+            getattr(
+                artifact_store,
+                "encrypted_at_rest",
+                False,
+            )
+        ),
+        artifact_signed_access=(
+            artifact_store is not None
+            and getattr(
+                artifact_store,
+                "provider_id",
+                "disabled",
+            ) != "disabled"
+        ),
         sandbox_mode=os.getenv(
             "NORA_SANDBOX_MODE",
             "disabled",
