@@ -12,11 +12,30 @@ from .base import InterviewBrain
 
 
 class FallbackBrain:
-    """Use a deterministic backup if the primary provider fails."""
+    """Use a deterministic backup and preserve degraded-mode provenance."""
 
-    def __init__(self, primary: InterviewBrain, fallback: InterviewBrain) -> None:
+    def __init__(
+        self,
+        primary: InterviewBrain,
+        fallback: InterviewBrain,
+    ) -> None:
         self.primary = primary
         self.fallback = fallback
+
+    @staticmethod
+    def _degraded(
+        decision: AgentDecision,
+        exc: Exception,
+    ) -> AgentDecision:
+        return decision.model_copy(
+            update={
+                "reason": (
+                    "degraded_fallback:"
+                    f"{type(exc).__name__}:"
+                    f"{decision.reason}"
+                )
+            }
+        )
 
     async def opening(
         self,
@@ -24,9 +43,19 @@ class FallbackBrain:
         job: JobSpec,
     ) -> AgentDecision:
         try:
-            return await self.primary.opening(session, job)
-        except Exception:
-            return await self.fallback.opening(session, job)
+            return await self.primary.opening(
+                session,
+                job,
+            )
+        except Exception as exc:
+            decision = await self.fallback.opening(
+                session,
+                job,
+            )
+            return self._degraded(
+                decision,
+                exc,
+            )
 
     async def after_answer(
         self,
@@ -34,9 +63,19 @@ class FallbackBrain:
         job: JobSpec,
     ) -> AgentDecision:
         try:
-            return await self.primary.after_answer(session, job)
-        except Exception:
-            return await self.fallback.after_answer(session, job)
+            return await self.primary.after_answer(
+                session,
+                job,
+            )
+        except Exception as exc:
+            decision = await self.fallback.after_answer(
+                session,
+                job,
+            )
+            return self._degraded(
+                decision,
+                exc,
+            )
 
     async def after_tool(
         self,
@@ -54,11 +93,15 @@ class FallbackBrain:
                 submission,
                 evaluation,
             )
-        except Exception:
-            return await self.fallback.after_tool(
+        except Exception as exc:
+            decision = await self.fallback.after_tool(
                 session,
                 job,
                 invocation,
                 submission,
                 evaluation,
+            )
+            return self._degraded(
+                decision,
+                exc,
             )
