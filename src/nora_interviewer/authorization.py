@@ -58,6 +58,11 @@ class Principal(StrictModel):
         min_length=1,
         max_length=512,
     )
+    organization_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+    )
 
 
 _ROLE_PERMISSIONS: dict[ActorRole, set[Permission]] = {
