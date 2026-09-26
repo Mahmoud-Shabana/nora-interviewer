@@ -34,6 +34,7 @@ class SystemCapabilities(StrictModel):
     hybrid_identity_auth: bool = False
     outbound_webhooks: bool = False
     provider_resilience: bool = True
+    portable_evidence_bundle: bool = True
     evidence_judge_ensemble: bool = False
     streaming_stt_enabled: bool = False
     streaming_stt_backend: str = "DisabledStreamingSpeechProvider"
