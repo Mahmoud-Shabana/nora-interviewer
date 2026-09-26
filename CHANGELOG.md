@@ -4,6 +4,59 @@ All notable Nora Interviewer development changes are documented here.
 
 The project is currently alpha-stage. The main branch can contain features that are newer than the latest package metadata.
 
+## 0.6.0 — 2026-09-26
+
+### Managed artifact storage
+
+- Added S3-compatible artifact storage as a production-oriented implementation of the existing ArtifactObjectStore contract.
+- Added mandatory server-side encryption with SSE-S3 and SSE-KMS modes.
+- Added bucket, prefix, region, endpoint, and KMS-key configuration.
+- Added normalized S3 transport/storage failures and distinct not-found handling.
+- Added optional `s3` dependency and deployment guidance.
+
+### Workload identity
+
+- Added dedicated service-workload JWT authentication with separate issuer, audience, JWKS, and principal configuration.
+- Added optional organization scope for workload identities.
+- Added hybrid `oidc+workload` mode for human and machine identity domains in one deployment.
+- Prevented workload tokens from choosing candidate, recruiter, or reviewer roles.
+- Enforced organization isolation on scoped service principals.
+
+### Outbound webhooks
+
+- Added signed `nora.webhook.v1` lifecycle delivery with HMAC-SHA256 signatures.
+- Added deterministic idempotency keys and bounded transient retry behavior.
+- Added organization-scoped subscriptions.
+- Restricted webhook payloads to privacy-minimized allowlisted lifecycle metadata.
+- Added auditable non-recursive `webhook_delivery` events.
+
+### Provider resilience
+
+- Added a reusable provider circuit-breaker contract.
+- Added timeout budgets, bounded retries, retry classification, backoff, cooldown, and half-open recovery for OpenAI-compatible providers.
+- Added equivalent resilience controls to the remote sandbox.
+- Added protected `/v1/system/resilience` circuit-state reporting.
+- Added explicit degraded fallback provenance to interview-brain decision reasons.
+
+### Evidence portability
+
+- Added `nora.evidence.bundle.v1` portable evidence exports.
+- Added active evidence provenance with grounded quote digests.
+- Added artifact ID/media/size/SHA-256 references without exposing backend storage keys.
+- Added audit-chain head verification and canonical VoxRubric trace digest.
+- Added deterministic bundle digest and organization-scoped export authorization.
+
+### Deployment and architecture
+
+- Added v0.6 production deployment reference.
+- Added v0.5 → v0.6 migration guidance.
+- Expanded architecture boundaries for workload identity, managed object storage, webhooks, provider resilience, and evidence portability.
+
+### Verification status
+
+- Package, runtime, API, README, changelog, and release-plan metadata are aligned at v0.6.0.
+- Runtime tests and GitHub Actions were intentionally not executed during this release pass because of the current account constraint. This entry documents implementation/static-review status and does not claim a fresh runtime test pass.
+
 ## 0.5.0 — 2026-09-26
 
 ### Organization identity
