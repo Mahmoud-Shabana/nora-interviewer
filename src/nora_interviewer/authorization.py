@@ -155,7 +155,10 @@ class AccessPolicy:
 
         if (
             session is not None
-            and principal.role is not ActorRole.SERVICE
+            and (
+                principal.role is not ActorRole.SERVICE
+                or principal.organization_id is not None
+            )
             and (
                 principal.organization_id is not None
                 or session.organization_id is not None
