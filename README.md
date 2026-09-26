@@ -13,8 +13,8 @@
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white">
   <img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-blue.svg">
   <img alt="Status Alpha" src="https://img.shields.io/badge/Status-Alpha-orange">
-  <img alt="Release 0.5.0" src="https://img.shields.io/badge/Package-0.5.0-6f42c1">
-  <img alt="Main v0.6 development" src="https://img.shields.io/badge/main-v0.6--dev-8A2BE2">
+  <img alt="Release 0.6.0" src="https://img.shields.io/badge/Package-0.6.0-6f42c1">
+  <img alt="Main v0.6.0" src="https://img.shields.io/badge/main-v0.6.0-8A2BE2">
   <img alt="CI" src="https://github.com/Mahmoud-Shabana/nora-interviewer/actions/workflows/ci.yml/badge.svg">
 </p>
 
@@ -58,8 +58,8 @@ It separates:
 
 | Area | Status |
 |---|---|
-| Package metadata | **0.5.0** |
-| Main branch | **v0.6 development** |
+| Package metadata | **0.6.0** |
+| Main branch | **v0.6.0 release line** |
 | Core orchestration | ✅ Implemented |
 | Dual-lane interviewing | ✅ Implemented |
 | Candidate controls | ✅ Implemented |
@@ -1132,7 +1132,9 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Practical Evaluators](docs/PRACTICAL_EVALUATORS.md)
 - [Arabic Technical Interviews](docs/ARABIC_TECHNICAL_INTERVIEWS.md)
 - [v0.5 Deployment Reference](docs/DEPLOYMENT_0_5.md)
+- [v0.6 Deployment Reference](docs/DEPLOYMENT_0_6.md)
 - [Migrating v0.4 → v0.5](docs/MIGRATING_0_4_TO_0_5.md)
+- [Migrating v0.5 → v0.6](docs/MIGRATING_0_5_TO_0_6.md)
 - [Session Concurrency & ETags](docs/CONCURRENCY.md)
 - [Session Lifecycle](docs/SESSION_LIFECYCLE.md)
 - [Data Retention](docs/RETENTION.md)
@@ -1252,7 +1254,7 @@ It should not be deployed as an autonomous hiring authority without appropriate 
 
 ---
 
-> **Verification note for v0.5.0:** package/API/docs metadata are aligned at 0.5.0, but runtime test execution and GitHub Actions were intentionally not run during this release pass because of the current account constraint. Existing test infrastructure remains in the repository; this release line does not claim a fresh runtime pass.
+> **Verification note for v0.6.0:** package/API/docs metadata are aligned at 0.6.0, but runtime test execution and GitHub Actions were intentionally not run during this release pass because of the current account constraint. Existing test infrastructure remains in the repository; this release line does not claim a fresh runtime pass.
 
 ---
 
