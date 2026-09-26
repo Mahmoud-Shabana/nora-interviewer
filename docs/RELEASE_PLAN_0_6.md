@@ -1,6 +1,6 @@
 # Nora v0.6.0 Development Plan
 
-Status: active — Gates 1–3 complete  
+Status: active — Gates 1–4 complete  
 Baseline: v0.5.0 release line  
 Current development line: main
 
@@ -56,11 +56,17 @@ No runtime tests or CI were executed; completion refers to implementation and st
 
 ## Gate 4 — Provider resilience
 
-- [ ] provider timeout budgets
-- [ ] retry classification and bounded backoff contracts
-- [ ] circuit-state exposure for model/judge/sandbox providers
-- [ ] degraded-mode provenance
-- [ ] operator documentation
+- [x] provider timeout budgets
+- [x] retry classification and bounded backoff contracts
+- [x] circuit-state exposure for model/judge/sandbox providers
+- [x] degraded-mode provenance
+- [x] operator documentation
+
+### Gate 4 implementation notes
+
+Completion-based Brain/Judge/Rubric providers and the remote sandbox now share bounded timeout/retry/circuit semantics. Provider circuit snapshots are available through a protected system endpoint, and deterministic Brain fallback records explicit degraded-mode provenance instead of failing silently.
+
+No runtime tests or CI were executed; completion refers to implementation and static contract review.
 
 ## Gate 5 — Evidence portability
 
