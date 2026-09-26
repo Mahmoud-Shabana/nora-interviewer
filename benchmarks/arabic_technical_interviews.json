@@ -1,0 +1,86 @@
+{
+  "schema_version": "1",
+  "pack": "nora-arabic-technical-interviews-v1",
+  "description": "Arabic technical interview ASR preservation fixtures for Nora/VoxRubric interoperability.",
+  "cases": [
+    {
+      "id": "saudi_backend_incident_01",
+      "locale": "ar-SA",
+      "dialect": "saudi-najdi",
+      "domain": "software_engineering",
+      "technical_vocabulary_packs": [
+        "ar-software-engineering-v1"
+      ],
+      "reference_text": "وقت الحادثة كان الـ API بيرجع timeout بسبب ضغط على PostgreSQL، فعملنا rollback للـ deployment وراجعنا latency والـ queue.",
+      "asr_transcript": "وقت الحادثة كان الـ API بيرجع timeout بسبب ضغط على PostgreSQL، فعملنا rollback للـ deployment وراجعنا latency والـ queue.",
+      "critical_terms": [
+        "API",
+        "timeout",
+        "PostgreSQL",
+        "rollback",
+        "deployment",
+        "latency",
+        "queue"
+      ],
+      "expected_code_switch": true
+    },
+    {
+      "id": "egypt_ai_rag_01",
+      "locale": "ar-EG",
+      "dialect": "egyptian",
+      "domain": "ai_ml",
+      "technical_vocabulary_packs": [
+        "ar-ai-ml-v1"
+      ],
+      "reference_text": "في نظام RAG كنت براجع الـ embedding والـ retrieval قبل الـ prompt، وبعدها بقيّس latency وجودة evaluation.",
+      "asr_transcript": "في نظام RAG كنت براجع الـ embedding والـ retrieval قبل الـ prompt، وبعدها بقيّس latency وجودة evaluation.",
+      "critical_terms": [
+        "RAG",
+        "embedding",
+        "prompt",
+        "latency",
+        "evaluation"
+      ],
+      "expected_code_switch": true
+    },
+    {
+      "id": "gulf_data_pipeline_01",
+      "locale": "ar-SA",
+      "dialect": "gulf",
+      "domain": "data_engineering",
+      "technical_vocabulary_packs": [
+        "ar-data-engineering-v1"
+      ],
+      "reference_text": "الـ ETL pipeline تسحب البيانات إلى schema موحد، وبعدها نستخدم SQL join وaggregation ونراجع percentile للتأكد من الشذوذ.",
+      "asr_transcript": "الـ ETL pipeline تسحب البيانات إلى schema موحد، وبعدها نستخدم SQL join وaggregation ونراجع percentile للتأكد من الشذوذ.",
+      "critical_terms": [
+        "ETL",
+        "pipeline",
+        "schema",
+        "SQL",
+        "join",
+        "aggregation",
+        "percentile"
+      ],
+      "expected_code_switch": true
+    },
+    {
+      "id": "arabic_only_system_design_01",
+      "locale": "ar-SA",
+      "dialect": "modern-standard-arabic",
+      "domain": "software_engineering",
+      "technical_vocabulary_packs": [
+        "ar-software-engineering-v1"
+      ],
+      "reference_text": "أستخدم طابوراً لتخفيف الضغط، وأحدد مهلة للطلبات، وأراقب زمن الاستجابة قبل توسيع النشر.",
+      "asr_transcript": "أستخدم طابوراً لتخفيف الضغط، وأحدد مهلة للطلبات، وأراقب زمن الاستجابة قبل توسيع النشر.",
+      "critical_terms": [
+        "طابور",
+        "مهلة",
+        "زمن الاستجابة",
+        "نشر"
+      ],
+      "expected_code_switch": false
+    }
+  ]
+}
