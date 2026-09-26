@@ -279,7 +279,11 @@ class ReviewService:
             job,
         )
 
-    async def summary(self) -> ReviewDashboardSummary:
+    async def summary(
+        self,
+        *,
+        organization_id: str | None = None,
+    ) -> ReviewDashboardSummary:
         sessions = await self.store.list_sessions()
 
         total_sessions = 0
@@ -294,6 +298,11 @@ class ReviewService:
         completed_sessions = 0
 
         for session in sessions:
+            if (
+                organization_id is not None
+                and session.organization_id != organization_id
+            ):
+                continue
             job = await self.store.get_job(session.job_id)
             if job is None:
                 continue
@@ -347,12 +356,18 @@ class ReviewService:
         self,
         *,
         job_id: str | None = None,
+        organization_id: str | None = None,
     ) -> list[EvidenceReevaluationQueueItem]:
         sessions = await self.store.list_sessions()
         items: list[EvidenceReevaluationQueueItem] = []
 
         for session in sessions:
             if job_id is not None and session.job_id != job_id:
+                continue
+            if (
+                organization_id is not None
+                and session.organization_id != organization_id
+            ):
                 continue
 
             job = await self.store.get_job(session.job_id)
@@ -401,12 +416,18 @@ class ReviewService:
         *,
         requires_review_only: bool = True,
         job_id: str | None = None,
+        organization_id: str | None = None,
     ) -> list[ReviewQueueItem]:
         sessions = await self.store.list_sessions()
         items: list[ReviewQueueItem] = []
 
         for session in sessions:
             if job_id is not None and session.job_id != job_id:
+                continue
+            if (
+                organization_id is not None
+                and session.organization_id != organization_id
+            ):
                 continue
 
             job = await self.store.get_job(session.job_id)
