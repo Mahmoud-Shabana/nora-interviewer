@@ -1229,6 +1229,78 @@ class InterviewService:
             for event in session.events
             if event.type is EventType.EVIDENCE_JUDGE_FAILED
         ]
+        language_profiles = [
+            {
+                "turn_id": turn.id,
+                "locale": turn.metadata.get(
+                    "asr_locale"
+                ),
+                "dialect": turn.metadata.get(
+                    "asr_dialect"
+                ),
+                "code_switch_detected": (
+                    turn.metadata.get(
+                        "code_switch_detected"
+                    )
+                ),
+                "code_switch_expected": (
+                    turn.metadata.get(
+                        "code_switch_expected"
+                    )
+                ),
+                "technical_vocabulary_packs": (
+                    turn.metadata.get(
+                        "technical_vocabulary_packs",
+                        [],
+                    )
+                ),
+                "technical_terms_detected": (
+                    turn.metadata.get(
+                        "technical_terms_detected",
+                        [],
+                    )
+                ),
+                "asr_reference_text": (
+                    turn.metadata.get(
+                        "asr_reference_text"
+                    )
+                ),
+                "asr_critical_terms": (
+                    turn.metadata.get(
+                        "asr_critical_terms",
+                        [],
+                    )
+                ),
+            }
+            for turn in session.turns
+            if (
+                turn.speaker is Speaker.CANDIDATE
+                and (
+                    "asr_locale"
+                    in turn.metadata
+                    or "asr_reference_text"
+                    in turn.metadata
+                    or "asr_critical_terms"
+                    in turn.metadata
+                )
+            )
+        ]
+        asr_preservation_turn_ids = [
+            item["turn_id"]
+            for item in language_profiles
+            if (
+                item["asr_reference_text"]
+                is not None
+                or item["asr_critical_terms"]
+            )
+        ]
+        code_switch_turn_ids = [
+            item["turn_id"]
+            for item in language_profiles
+            if item[
+                "code_switch_detected"
+            ]
+        ]
         audit_head_hash = verify_event_chain(
             session.events
         )
@@ -1260,6 +1332,13 @@ class InterviewService:
                 "interviewer_turns": session.asked_questions,
                 "candidate_controls": candidate_controls,
                 "voice_events": voice_events,
+                "language_profiles": language_profiles,
+                "asr_preservation_turn_ids": (
+                    asr_preservation_turn_ids
+                ),
+                "code_switch_turn_ids": (
+                    code_switch_turn_ids
+                ),
                 "evidence_judge_failures": evidence_judge_failures,
                 "audit_chain": {
                     "verified": (
