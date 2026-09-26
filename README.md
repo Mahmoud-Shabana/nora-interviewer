@@ -14,7 +14,7 @@
   <img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-blue.svg">
   <img alt="Status Alpha" src="https://img.shields.io/badge/Status-Alpha-orange">
   <img alt="Release 0.5.0" src="https://img.shields.io/badge/Package-0.5.0-6f42c1">
-  <img alt="Main v0.5.0" src="https://img.shields.io/badge/main-v0.5.0-8A2BE2">
+  <img alt="Main v0.6 development" src="https://img.shields.io/badge/main-v0.6--dev-8A2BE2">
   <img alt="CI" src="https://github.com/Mahmoud-Shabana/nora-interviewer/actions/workflows/ci.yml/badge.svg">
 </p>
 
@@ -59,7 +59,7 @@ It separates:
 | Area | Status |
 |---|---|
 | Package metadata | **0.5.0** |
-| Main branch | **v0.5.0 release line** |
+| Main branch | **v0.6 development** |
 | Core orchestration | ✅ Implemented |
 | Dual-lane interviewing | ✅ Implemented |
 | Candidate controls | ✅ Implemented |
@@ -86,6 +86,7 @@ It separates:
 | Failure/recovery release regression coverage | ✅ Implemented |
 | Organization-scoped OIDC | ✅ Implemented on v0.5 development line |
 | Encrypted artifact storage | ✅ Encrypted local provider + signed access |
+| S3-compatible artifact storage | ✅ SSE-S3 / SSE-KMS provider on v0.6 development line |
 | External sandbox service | ✅ `nora.sandbox.v1` remote runner |
 | Domain practical evaluators | ✅ Coding + system design + document + data analysis |
 | Arabic technical interview depth | ✅ Dialect metadata + code-switch + ASR preservation export |
@@ -1116,6 +1117,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Authorization Model](docs/AUTHORIZATION.md)
 - [Storage Backends](docs/STORAGE.md)
 - [Encrypted Artifact Storage](docs/ARTIFACT_STORAGE.md)
+- [S3-Compatible Artifact Storage](docs/S3_ARTIFACT_STORAGE.md)
 - [External Sandbox Service](docs/SANDBOX_SERVICE.md)
 - [Practical Evaluators](docs/PRACTICAL_EVALUATORS.md)
 - [Arabic Technical Interviews](docs/ARABIC_TECHNICAL_INTERVIEWS.md)
