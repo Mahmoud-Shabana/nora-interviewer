@@ -197,7 +197,13 @@ class InterviewService:
             tool_invocation=tool_invocation,
         )
 
-    async def answer(self, session_id: str, text: str) -> SessionStep:
+    async def answer(
+        self,
+        session_id: str,
+        text: str,
+        *,
+        turn_metadata: dict | None = None,
+    ) -> SessionStep:
         session, job = await self._get(session_id)
         if session.status is SessionStatus.CREATED:
             await self.start(session_id)
@@ -223,13 +229,17 @@ class InterviewService:
             speaker=Speaker.CANDIDATE,
             text=text,
             parent_turn_id=previous_question.id if previous_question else None,
+            metadata=dict(turn_metadata or {}),
         )
         session.turns.append(candidate)
         append_event(
             session,
             EventType.CANDIDATE_TURN,
             turn=candidate,
-            payload={"parent_turn_id": candidate.parent_turn_id},
+            payload={
+                "parent_turn_id": candidate.parent_turn_id,
+                "metadata": candidate.metadata,
+            },
         )
 
         if previous_question and previous_question.competency_tags:
