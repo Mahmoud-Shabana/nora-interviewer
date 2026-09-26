@@ -64,6 +64,11 @@ class RubricApprovalRequest(StrictModel):
 
 class RubricDraft(StrictModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
+    organization_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
@@ -165,6 +170,7 @@ def approve_rubric_draft(
     request: RubricApprovalRequest,
     *,
     approved_by: str,
+    organization_id: str | None = None,
 ) -> tuple[RubricDraft, JobSpec]:
     if draft.activation_status != "draft_only":
         raise RubricDraftError("rubric draft is already approved")
@@ -174,6 +180,7 @@ def approve_rubric_draft(
     summary = _edit_summary(draft, request)
     job = JobSpec(
         id=job_id,
+        organization_id=organization_id or draft.organization_id,
         title=request.title,
         description=request.description,
         competencies=request.competencies,
