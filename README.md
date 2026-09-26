@@ -13,8 +13,8 @@
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white">
   <img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-blue.svg">
   <img alt="Status Alpha" src="https://img.shields.io/badge/Status-Alpha-orange">
-  <img alt="Release 0.3.0" src="https://img.shields.io/badge/Package-0.3.0-6f42c1">
-  <img alt="Main v0.4 release preparation" src="https://img.shields.io/badge/main-v0.4--release--prep-8A2BE2">
+  <img alt="Release 0.4.0" src="https://img.shields.io/badge/Package-0.4.0-6f42c1">
+  <img alt="Main v0.4.0" src="https://img.shields.io/badge/main-v0.4.0-8A2BE2">
   <img alt="CI" src="https://github.com/Mahmoud-Shabana/nora-interviewer/actions/workflows/ci.yml/badge.svg">
 </p>
 
@@ -58,8 +58,8 @@ It separates:
 
 | Area | Status |
 |---|---|
-| Published package metadata | **0.3.0** |
-| Main branch | **v0.4 release preparation** |
+| Package metadata | **0.4.0** |
+| Main branch | **v0.4.0 release line** |
 | Core orchestration | ✅ Implemented |
 | Dual-lane interviewing | ✅ Implemented |
 | Candidate controls | ✅ Implemented |
