@@ -20,6 +20,7 @@ from .authn import (
 )
 from .evidence_ensemble import EvidenceJudgeEnsemble
 from .evidence_judge import DisabledEvidenceJudge, LLMEvidenceJudge
+from .models import EventType
 from .providers.completion import OpenAICompatibleChatProvider
 from .providers.fallback import FallbackBrain
 from .providers.llm_brain import LLMInterviewBrain
@@ -39,6 +40,11 @@ from .slo import OperationalSloPolicy
 from .sqlite_store import SqliteStore
 from .storage import InMemoryStore
 from .vad import VadConfig
+from .webhooks import (
+    WebhookDispatcher,
+    WebhookDispatchingStore,
+    WebhookSubscription,
+)
 
 
 
@@ -1250,4 +1256,163 @@ def build_store():
 
     raise RuntimeError(
         f"Unsupported NORA_STORE_MODE: {mode}"
+    )
+
+
+def build_webhook_store(store):
+    raw = os.getenv(
+        "NORA_WEBHOOK_SUBSCRIPTIONS_JSON",
+        "",
+    ).strip()
+    if not raw:
+        return store
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            "NORA_WEBHOOK_SUBSCRIPTIONS_JSON must be valid JSON"
+        ) from exc
+    if not isinstance(payload, list):
+        raise RuntimeError(
+            "NORA_WEBHOOK_SUBSCRIPTIONS_JSON must be a JSON array"
+        )
+
+    allow_insecure = os.getenv(
+        "NORA_WEBHOOK_ALLOW_INSECURE",
+        "false",
+    ).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+    subscriptions = []
+    seen_ids = set()
+    for item in payload:
+        if not isinstance(item, dict):
+            raise RuntimeError(
+                "Webhook subscriptions must be JSON objects"
+            )
+        subscription_id = str(
+            item.get("id", "")
+        ).strip()
+        url = str(
+            item.get("url", "")
+        ).strip()
+        secret = str(
+            item.get("secret", "")
+        ).encode("utf-8")
+        organization_id = item.get(
+            "organization_id"
+        )
+
+        if not subscription_id or subscription_id in seen_ids:
+            raise RuntimeError(
+                "Webhook subscription ids must be non-empty and unique"
+            )
+        seen_ids.add(
+            subscription_id
+        )
+
+        if (
+            url.startswith("http://")
+            and not allow_insecure
+        ):
+            raise RuntimeError(
+                "Webhook URLs must use https:// unless "
+                "NORA_WEBHOOK_ALLOW_INSECURE=true"
+            )
+
+        raw_events = item.get(
+            "event_types"
+        )
+        if raw_events is None:
+            event_types = None
+        else:
+            if not isinstance(
+                raw_events,
+                list,
+            ):
+                raise RuntimeError(
+                    "Webhook event_types must be a JSON array"
+                )
+            try:
+                event_types = frozenset(
+                    EventType(
+                        str(value)
+                    )
+                    for value in raw_events
+                )
+            except ValueError as exc:
+                raise RuntimeError(
+                    "Webhook subscription contains an unknown event type"
+                ) from exc
+
+        try:
+            kwargs = {
+                "id": subscription_id,
+                "url": url,
+                "secret": secret,
+                "organization_id": (
+                    str(organization_id).strip()
+                    if organization_id is not None
+                    and str(organization_id).strip()
+                    else None
+                ),
+            }
+            if event_types is not None:
+                kwargs[
+                    "event_types"
+                ] = event_types
+            subscriptions.append(
+                WebhookSubscription(
+                    **kwargs
+                )
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Invalid webhook subscription {subscription_id!r}: {exc}"
+            ) from exc
+
+    try:
+        timeout_seconds = float(
+            os.getenv(
+                "NORA_WEBHOOK_TIMEOUT_SECONDS",
+                "8",
+            )
+        )
+        max_attempts = int(
+            os.getenv(
+                "NORA_WEBHOOK_MAX_ATTEMPTS",
+                "3",
+            )
+        )
+        retry_base_seconds = float(
+            os.getenv(
+                "NORA_WEBHOOK_RETRY_BASE_SECONDS",
+                "0.25",
+            )
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            "Webhook timeout/retry settings are invalid"
+        ) from exc
+
+    try:
+        dispatcher = WebhookDispatcher(
+            subscriptions,
+            timeout_seconds=timeout_seconds,
+            max_attempts=max_attempts,
+            retry_base_seconds=retry_base_seconds,
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Invalid webhook dispatcher configuration: {exc}"
+        ) from exc
+
+    return WebhookDispatchingStore(
+        store,
+        dispatcher,
     )
