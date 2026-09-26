@@ -4,6 +4,57 @@ All notable Nora Interviewer development changes are documented here.
 
 The project is currently alpha-stage. The main branch can contain features that are newer than the latest package metadata.
 
+## 0.5.0 — 2026-09-26
+
+### Organization identity
+
+- Added organization-scoped OIDC authentication with issuer, audience, JWKS, organization-claim, and group-to-role mapping.
+- Added organization identity to principals, jobs, rubric drafts, approved jobs, and interview sessions.
+- Added cross-organization isolation for session access, review queues, evidence reevaluation, and rubric workflows.
+- Prevented organization OIDC from granting Nora's internal service role.
+
+### Encrypted artifacts
+
+- Added a provider-neutral artifact object-store contract.
+- Added AES-256-GCM encrypted local artifact storage with hashed filesystem paths.
+- Added session-scoped artifact metadata, SHA-256 integrity verification, and auditable create/access/delete lifecycle.
+- Added short-lived HMAC-signed artifact access grants.
+- Added bounded streaming artifact uploads and retention-time artifact purge.
+- Added optional `artifacts` encryption dependency and capability reporting.
+
+### External sandbox
+
+- Added `nora.sandbox.v1` remote execution service support.
+- Added explicit CPU, memory, process, timeout, network, filesystem, and privilege policy in remote execution requests.
+- Added structured sandbox provider/execution/artifact provenance.
+- Made remote sandbox transport/protocol failures degrade to explicit manual review instead of false candidate failure.
+
+### Practical evaluators
+
+- Added structured system-design/case-study, document-analysis, and data-analysis evaluators.
+- Added a built-in service-latency data-analysis template.
+- Added evaluator ID/version/template provenance to practical evaluations.
+- Preserved the human-review boundary for non-coding domain artifacts instead of producing automatic hiring scores.
+
+### Arabic technical interviews
+
+- Added Arabic/English technical vocabulary packs for software engineering, AI/ML, and data engineering.
+- Added explicit locale/dialect transcript metadata and Arabic/Latin code-switch detection.
+- Added Arabic technical interview ASR preservation fixtures.
+- Added VoxRubric-compatible `asr_reference_text`, `asr_critical_terms`, language profiles, and code-switch export fields.
+- Kept dialect/accent metadata descriptive and outside hiring evidence.
+
+### Deployment and architecture
+
+- Added a v0.5 deployment reference for OIDC, PostgreSQL, artifact storage, remote sandbox, voice providers, and model providers.
+- Added v0.4 → v0.5 migration guidance.
+- Expanded architecture documentation with explicit identity, artifact, sandbox, model, language, operational, and human-decision threat boundaries.
+
+### Verification status
+
+- Package, runtime, API, README, changelog, and release-plan metadata are aligned at v0.5.0.
+- Runtime tests and GitHub Actions were intentionally not executed during this release pass because of the current account constraint. This entry documents implementation/static review status and does not claim a fresh runtime test pass.
+
 ## 0.4.0 — 2026-09-26
 
 ### Interview orchestration
