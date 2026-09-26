@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from pydantic import Field
 
 from .models import StrictModel
 from .storage import Store
+
+if TYPE_CHECKING:
+    from .artifact_service import ArtifactService
 
 
 class RetentionRequest(StrictModel):
@@ -48,9 +51,11 @@ class RetentionManager:
         self,
         store: Store,
         *,
+        artifact_service: "ArtifactService | None" = None,
         now: Callable[[], datetime] | None = None,
     ) -> None:
         self.store = store
+        self.artifact_service = artifact_service
         self.now = now or (
             lambda: datetime.now(timezone.utc)
         )
@@ -109,6 +114,12 @@ class RetentionManager:
             )
 
             if not request.dry_run:
+                if self.artifact_service is not None:
+                    await self.artifact_service.purge_session(
+                        session.id,
+                        deleted_by="retention",
+                        reason="session_retention",
+                    )
                 removed = await self.store.delete_session(
                     session.id
                 )
