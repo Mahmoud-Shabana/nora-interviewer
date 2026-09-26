@@ -1,6 +1,6 @@
 # Nora v0.4.0 Release Plan
 
-Status: active  
+Status: release metadata prepared; runtime test execution deferred  
 Baseline: `5a615f0d`  
 Current development line: `main`
 
@@ -67,9 +67,9 @@ Covered by:
 
 ### Gate 4 — Release preparation
 
-- [ ] synchronize README and architecture docs
-- [ ] update changelog
-- [ ] bump package version to 0.4.0 only after release gates pass
+- [x] synchronize README and architecture docs
+- [x] update changelog
+- [x] bump package version to 0.4.0
 
 ## Explicitly not next
 
@@ -82,3 +82,8 @@ Do not rebuild:
 - VoxRubric Arena integration
 
 These are already implemented and should only change in response to a concrete failing regression or release requirement.
+
+
+## Verification constraint
+
+Package and runtime metadata are now aligned at `0.4.0`. Per the current account constraint, no test suite or GitHub Actions workflow was executed during this release-preparation pass. Existing regression coverage remains in the repository, but runtime verification is explicitly deferred rather than claimed as passed.
