@@ -160,6 +160,13 @@ class CodingInterviewTool:
                 evidence={
                     "sandbox_unavailable": str(exc),
                     "review_required": True,
+                    "evaluation_provenance": {
+                    "evaluator_id": "nora.coding.python_tests",
+                    "evaluator_version": "1",
+                    "tool_kind": "coding",
+                    "template_id": invocation.payload.get("template_id"),
+                    "automatic_hiring_decision": False,
+                },
                 },
             )
 
@@ -180,6 +187,13 @@ class CodingInterviewTool:
                         item.model_dump(mode="json")
                         for item in result.artifacts
                     ],
+                    "evaluation_provenance": {
+                    "evaluator_id": "nora.coding.python_tests",
+                    "evaluator_version": "1",
+                    "tool_kind": "coding",
+                    "template_id": invocation.payload.get("template_id"),
+                    "automatic_hiring_decision": False,
+                },
                 },
             )
 
@@ -200,6 +214,13 @@ class CodingInterviewTool:
                         item.model_dump(mode="json")
                         for item in result.artifacts
                     ],
+                    "evaluation_provenance": {
+                    "evaluator_id": "nora.coding.python_tests",
+                    "evaluator_version": "1",
+                    "tool_kind": "coding",
+                    "template_id": invocation.payload.get("template_id"),
+                    "automatic_hiring_decision": False,
+                },
                 },
             )
 
@@ -224,5 +245,12 @@ class CodingInterviewTool:
                     item.model_dump(mode="json")
                     for item in result.artifacts
                 ],
+                "evaluation_provenance": {
+                    "evaluator_id": "nora.coding.python_tests",
+                    "evaluator_version": "1",
+                    "tool_kind": "coding",
+                    "template_id": invocation.payload.get("template_id"),
+                    "automatic_hiring_decision": False,
+                },
             },
         )
