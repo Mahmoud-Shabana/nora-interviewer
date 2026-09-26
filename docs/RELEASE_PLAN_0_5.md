@@ -1,6 +1,6 @@
 # Nora v0.5.0 Development Plan
 
-Status: active — Gate 1 complete  
+Status: active — Gates 1–2 complete  
 Baseline: v0.4.0 release line  
 Current development line: main
 
@@ -31,11 +31,19 @@ No runtime tests or CI were executed for this gate because of the current accoun
 
 ## Gate 2 — Encrypted artifact storage
 
-- [ ] object-storage abstraction for candidate artifacts/audio
-- [ ] encrypted-at-rest provider boundary
-- [ ] signed/expiring artifact access
-- [ ] retention/deletion integration
-- [ ] audit provenance for artifact creation, access, and deletion
+- [x] object-storage abstraction for candidate artifacts/audio
+- [x] encrypted-at-rest provider boundary
+- [x] signed/expiring artifact access
+- [x] retention/deletion integration
+- [x] audit provenance for artifact creation, access, and deletion
+
+### Gate 2 implementation notes
+
+Nora now has an artifact object-store protocol, disabled provider, AES-256-GCM encrypted local provider, session-scoped artifact metadata, SHA-256 integrity verification, short-lived HMAC-signed access tokens, bounded streaming uploads, creation/access/deletion audit events, and retention purge integration.
+
+The built-in provider is intentionally a local/single-node implementation of the contract. Managed cloud object-store adapters can implement the same interface later without changing session semantics.
+
+No runtime tests or CI were executed for this gate because of the current account constraint; completion refers to implementation and static contract review.
 
 ## Gate 3 — External sandbox service
 
