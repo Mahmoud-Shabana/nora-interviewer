@@ -32,6 +32,7 @@ from .providers.websocket_speech import JsonWebSocketSpeechProvider
 from .providers.websocket_tts import JsonWebSocketTtsProvider
 from .postgres_store import PostgresStore
 from .provider_health import ProviderHealthRegistry
+from .s3_artifact_storage import S3ArtifactObjectStore
 from .slo import OperationalSloPolicy
 from .sqlite_store import SqliteStore
 from .storage import InMemoryStore
@@ -49,6 +50,61 @@ def build_artifact_store():
 
     if mode == "disabled":
         return DisabledArtifactObjectStore()
+
+    if mode == "s3":
+        bucket = os.getenv(
+            "NORA_ARTIFACT_S3_BUCKET",
+            "",
+        ).strip()
+        prefix = os.getenv(
+            "NORA_ARTIFACT_S3_PREFIX",
+            "",
+        ).strip()
+        region = os.getenv(
+            "NORA_ARTIFACT_S3_REGION"
+        )
+        endpoint_url = os.getenv(
+            "NORA_ARTIFACT_S3_ENDPOINT_URL"
+        )
+        sse_mode = os.getenv(
+            "NORA_ARTIFACT_S3_SSE_MODE",
+            "AES256",
+        ).strip()
+        kms_key_id = os.getenv(
+            "NORA_ARTIFACT_S3_KMS_KEY_ID"
+        )
+
+        if not bucket:
+            raise RuntimeError(
+                "NORA_ARTIFACT_S3_BUCKET is required in s3 artifact mode"
+            )
+        if (
+            endpoint_url
+            and endpoint_url.strip().startswith("http://")
+            and not os.getenv(
+                "NORA_ARTIFACT_S3_ALLOW_INSECURE",
+                "false",
+            ).strip().lower()
+            in {"1", "true", "yes", "on"}
+        ):
+            raise RuntimeError(
+                "NORA_ARTIFACT_S3_ENDPOINT_URL must use https:// unless "
+                "NORA_ARTIFACT_S3_ALLOW_INSECURE=true"
+            )
+
+        try:
+            return S3ArtifactObjectStore(
+                bucket=bucket,
+                prefix=prefix,
+                region=region,
+                endpoint_url=endpoint_url,
+                sse_mode=sse_mode,
+                kms_key_id=kms_key_id,
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Invalid S3 artifact storage configuration: {exc}"
+            ) from exc
 
     if mode == "encrypted-local":
         root = os.getenv(
