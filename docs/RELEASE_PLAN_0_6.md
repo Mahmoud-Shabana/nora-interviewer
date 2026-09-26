@@ -1,6 +1,6 @@
 # Nora v0.6.0 Development Plan
 
-Status: active — Gate 1 in progress  
+Status: active — Gate 1 complete  
 Baseline: v0.5.0 release line  
 Current development line: main
 
@@ -14,11 +14,17 @@ Current development line: main
 
 ## Gate 1 — Managed artifact storage
 
-- [ ] S3-compatible object-store provider
-- [ ] SSE-S3 and SSE-KMS configuration
-- [ ] endpoint/region/bucket/prefix configuration
-- [ ] normalized storage errors and not-found handling
-- [ ] deployment and migration documentation
+- [x] S3-compatible object-store provider
+- [x] SSE-S3 and SSE-KMS configuration
+- [x] endpoint/region/bucket/prefix configuration
+- [x] normalized storage errors and not-found handling
+- [x] deployment and migration documentation
+
+### Gate 1 implementation notes
+
+Nora now supports S3-compatible artifact storage with mandatory server-side encryption, SSE-S3/SSE-KMS selection, optional KMS key, bucket/prefix/region/endpoint configuration, normalized provider failures, and compatibility with the existing signed-access/integrity/retention artifact lifecycle.
+
+No runtime tests or CI were executed; completion refers to implementation and static contract review.
 
 ## Gate 2 — Workload/service identity
 
