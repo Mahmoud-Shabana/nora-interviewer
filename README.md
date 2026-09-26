@@ -86,6 +86,7 @@ It separates:
 | Failure/recovery release regression coverage | ✅ Implemented |
 | Organization-scoped OIDC | ✅ Implemented |
 | Workload/service JWT identity | ✅ Dedicated + hybrid OIDC/workload modes on v0.6 development line |
+| Signed outbound webhooks | ✅ Scoped, privacy-minimized delivery on v0.6 development line |
 | Encrypted artifact storage | ✅ Encrypted local provider + signed access |
 | S3-compatible artifact storage | ✅ SSE-S3 / SSE-KMS provider on v0.6 development line |
 | External sandbox service | ✅ `nora.sandbox.v1` remote runner |
@@ -1117,6 +1118,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Independent Evidence Judge](docs/EVIDENCE_JUDGE.md)
 - [Authorization Model](docs/AUTHORIZATION.md)
 - [Workload Identity](docs/WORKLOAD_IDENTITY.md)
+- [Outbound Webhooks](docs/WEBHOOKS.md)
 - [Storage Backends](docs/STORAGE.md)
 - [Encrypted Artifact Storage](docs/ARTIFACT_STORAGE.md)
 - [S3-Compatible Artifact Storage](docs/S3_ARTIFACT_STORAGE.md)
