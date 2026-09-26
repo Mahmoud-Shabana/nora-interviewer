@@ -88,6 +88,7 @@ It separates:
 | Workload/service JWT identity | ✅ Dedicated + hybrid OIDC/workload modes on v0.6 development line |
 | Signed outbound webhooks | ✅ Scoped, privacy-minimized delivery on v0.6 development line |
 | Provider resilience | ✅ Retry budgets + circuits + degraded provenance on v0.6 development line |
+| Portable evidence bundles | ✅ Audit/artifact/VoxRubric anchored export on v0.6 development line |
 | Encrypted artifact storage | ✅ Encrypted local provider + signed access |
 | S3-compatible artifact storage | ✅ SSE-S3 / SSE-KMS provider on v0.6 development line |
 | External sandbox service | ✅ `nora.sandbox.v1` remote runner |
@@ -991,6 +992,7 @@ export NORA_SANDBOX_IMAGE=python:3.12-alpine
 | GET | `/v1/sessions/{id}/replay` |
 | POST | `/v1/sessions/{id}/decision-replay` |
 | GET | `/v1/sessions/{id}/voxrubric` |
+| GET | `/v1/sessions/{id}/evidence-bundle` |
 
 ## System / operations
 
@@ -1122,6 +1124,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Workload Identity](docs/WORKLOAD_IDENTITY.md)
 - [Outbound Webhooks](docs/WEBHOOKS.md)
 - [Provider Resilience](docs/PROVIDER_RESILIENCE.md)
+- [Portable Evidence Bundles](docs/EVIDENCE_BUNDLES.md)
 - [Storage Backends](docs/STORAGE.md)
 - [Encrypted Artifact Storage](docs/ARTIFACT_STORAGE.md)
 - [S3-Compatible Artifact Storage](docs/S3_ARTIFACT_STORAGE.md)
