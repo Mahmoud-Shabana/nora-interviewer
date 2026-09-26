@@ -10,6 +10,12 @@ from typing import Any, Protocol
 from pydantic import Field
 
 from .models import StrictModel
+from .resilience import (
+    CircuitBreaker,
+    ProviderCircuitOpenError,
+    ProviderResilienceSnapshot,
+    retryable_http_status,
+)
 
 
 class SandboxUnavailable(RuntimeError):
@@ -165,11 +171,7 @@ class DockerSandboxRunner:
 
 
 class RemoteSandboxRunner:
-    """Dispatch execution to a dedicated Nora sandbox service.
-
-    Protocol: nora.sandbox.v1
-    Endpoint: POST {base_url}/v1/executions/python
-    """
+    """Dispatch execution to a dedicated Nora sandbox service."""
 
     provider_id = "remote"
 
@@ -179,17 +181,48 @@ class RemoteSandboxRunner:
         base_url: str,
         token: str | None = None,
         request_timeout_seconds: float = 35.0,
+        max_attempts: int = 2,
+        retry_base_seconds: float = 0.25,
+        failure_threshold: int = 3,
+        cooldown_seconds: float = 20.0,
     ) -> None:
         base_url = base_url.rstrip("/")
         if not base_url:
-            raise ValueError("remote sandbox base_url is required")
+            raise ValueError(
+                "remote sandbox base_url is required"
+            )
         if request_timeout_seconds <= 0:
             raise ValueError(
                 "remote sandbox request timeout must be positive"
             )
+        if not 1 <= max_attempts <= 5:
+            raise ValueError(
+                "remote sandbox max_attempts must be between 1 and 5"
+            )
+        if retry_base_seconds < 0 or retry_base_seconds > 5:
+            raise ValueError(
+                "remote sandbox retry base must be between 0 and 5"
+            )
+
         self.base_url = base_url
         self.token = token
-        self.request_timeout_seconds = request_timeout_seconds
+        self.request_timeout_seconds = (
+            request_timeout_seconds
+        )
+        self.max_attempts = max_attempts
+        self.retry_base_seconds = (
+            retry_base_seconds
+        )
+        self.circuit = CircuitBreaker(
+            provider_id="remote-sandbox",
+            failure_threshold=failure_threshold,
+            cooldown_seconds=cooldown_seconds,
+        )
+
+    def resilience_snapshot(
+        self,
+    ) -> ProviderResilienceSnapshot:
+        return self.circuit.snapshot()
 
     async def run_python(
         self,
@@ -210,9 +243,9 @@ class RemoteSandboxRunner:
             "Accept": "application/json",
         }
         if self.token:
-            headers["Authorization"] = (
-                "Bearer " + self.token
-            )
+            headers[
+                "Authorization"
+            ] = "Bearer " + self.token
 
         payload: dict[str, Any] = {
             "protocol": "nora.sandbox.v1",
@@ -230,90 +263,145 @@ class RemoteSandboxRunner:
             },
         }
 
-        try:
-            async with httpx.AsyncClient(
-                timeout=self.request_timeout_seconds,
-            ) as client:
-                response = await client.post(
-                    self.base_url
-                    + "/v1/executions/python",
-                    headers=headers,
-                    json=payload,
+        last_error: Exception | None = None
+
+        for attempt in range(
+            1,
+            self.max_attempts + 1,
+        ):
+            try:
+                self.circuit.before_call()
+            except ProviderCircuitOpenError as exc:
+                raise SandboxUnavailable(
+                    "Remote sandbox circuit is open"
+                ) from exc
+
+            try:
+                async with httpx.AsyncClient(
+                    timeout=(
+                        self.request_timeout_seconds
+                    ),
+                ) as client:
+                    response = await client.post(
+                        self.base_url
+                        + "/v1/executions/python",
+                        headers=headers,
+                        json=payload,
+                    )
+            except (
+                httpx.TimeoutException,
+                httpx.RequestError,
+            ) as exc:
+                self.circuit.record_failure()
+                last_error = exc
+                if attempt >= self.max_attempts:
+                    raise SandboxUnavailable(
+                        "Remote sandbox is unavailable"
+                    ) from exc
+                await asyncio.sleep(
+                    self.retry_base_seconds
+                    * (2 ** (attempt - 1))
                 )
-        except (
-            httpx.TimeoutException,
-            httpx.RequestError,
-        ) as exc:
-            raise SandboxUnavailable(
-                "Remote sandbox is unavailable"
-            ) from exc
+                continue
 
-        if response.status_code in {
-            408,
-            429,
-            502,
-            503,
-            504,
-        }:
-            raise SandboxUnavailable(
-                "Remote sandbox is temporarily unavailable"
-            )
-        if response.status_code < 200 or response.status_code >= 300:
-            raise SandboxUnavailable(
-                "Remote sandbox rejected the execution request"
-            )
+            if (
+                response.status_code < 200
+                or response.status_code >= 300
+            ):
+                self.circuit.record_failure()
+                retryable = retryable_http_status(
+                    response.status_code
+                )
+                if (
+                    not retryable
+                    or attempt >= self.max_attempts
+                ):
+                    if retryable:
+                        raise SandboxUnavailable(
+                            "Remote sandbox is temporarily unavailable"
+                        )
+                    raise SandboxUnavailable(
+                        "Remote sandbox rejected the execution request"
+                    )
+                await asyncio.sleep(
+                    self.retry_base_seconds
+                    * (2 ** (attempt - 1))
+                )
+                continue
 
-        try:
-            body = response.json()
-        except ValueError as exc:
-            raise SandboxUnavailable(
-                "Remote sandbox returned invalid JSON"
-            ) from exc
-        if not isinstance(body, dict):
-            raise SandboxUnavailable(
-                "Remote sandbox returned an invalid response"
-            )
-        if body.get("protocol") != "nora.sandbox.v1":
-            raise SandboxUnavailable(
-                "Remote sandbox protocol version mismatch"
-            )
+            try:
+                body = response.json()
+            except ValueError as exc:
+                self.circuit.record_failure()
+                raise SandboxUnavailable(
+                    "Remote sandbox returned invalid JSON"
+                ) from exc
+            if not isinstance(body, dict):
+                self.circuit.record_failure()
+                raise SandboxUnavailable(
+                    "Remote sandbox returned an invalid response"
+                )
+            if body.get(
+                "protocol"
+            ) != "nora.sandbox.v1":
+                self.circuit.record_failure()
+                raise SandboxUnavailable(
+                    "Remote sandbox protocol version mismatch"
+                )
 
-        result_payload = body.get(
-            "result"
-        )
-        if not isinstance(result_payload, dict):
-            raise SandboxUnavailable(
-                "Remote sandbox response is missing result"
+            result_payload = body.get(
+                "result"
             )
-        result_payload = dict(result_payload)
-        result_payload["provider_id"] = str(
-            body.get("provider_id")
-            or "remote"
-        )
-        execution_id = body.get(
-            "execution_id"
-        )
-        if execution_id is not None:
-            result_payload[
-                "execution_id"
-            ] = str(execution_id)
-
-        try:
-            result = SandboxResult.model_validate(
+            if not isinstance(
+                result_payload,
+                dict,
+            ):
+                self.circuit.record_failure()
+                raise SandboxUnavailable(
+                    "Remote sandbox response is missing result"
+                )
+            result_payload = dict(
                 result_payload
             )
-        except Exception as exc:
-            raise SandboxUnavailable(
-                "Remote sandbox result failed contract validation"
-            ) from exc
+            result_payload[
+                "provider_id"
+            ] = str(
+                body.get(
+                    "provider_id"
+                )
+                or "remote"
+            )
+            execution_id = body.get(
+                "execution_id"
+            )
+            if execution_id is not None:
+                result_payload[
+                    "execution_id"
+                ] = str(execution_id)
 
-        result.stdout = result.stdout[
-            -20_000:
-        ]
-        result.stderr = result.stderr[
-            -20_000:
-        ]
-        return result
+            try:
+                result = SandboxResult.model_validate(
+                    result_payload
+                )
+            except Exception as exc:
+                self.circuit.record_failure()
+                raise SandboxUnavailable(
+                    "Remote sandbox result failed contract validation"
+                ) from exc
+
+            result.stdout = result.stdout[
+                -20_000:
+            ]
+            result.stderr = result.stderr[
+                -20_000:
+            ]
+            self.circuit.record_success()
+            return result
+
+        assert last_error is not None
+        raise SandboxUnavailable(
+            "Remote sandbox is unavailable"
+        ) from last_error
 
 
 def default_sandbox_runner() -> SandboxRunner:
@@ -363,6 +451,30 @@ def default_sandbox_runner() -> SandboxRunner:
                 base_url=base_url,
                 token=token,
                 request_timeout_seconds=request_timeout,
+                max_attempts=int(
+                    os.getenv(
+                        "NORA_SANDBOX_REMOTE_MAX_ATTEMPTS",
+                        "2",
+                    )
+                ),
+                retry_base_seconds=float(
+                    os.getenv(
+                        "NORA_SANDBOX_REMOTE_RETRY_BASE_SECONDS",
+                        "0.25",
+                    )
+                ),
+                failure_threshold=int(
+                    os.getenv(
+                        "NORA_SANDBOX_REMOTE_FAILURE_THRESHOLD",
+                        "3",
+                    )
+                ),
+                cooldown_seconds=float(
+                    os.getenv(
+                        "NORA_SANDBOX_REMOTE_COOLDOWN_SECONDS",
+                        "20",
+                    )
+                ),
             )
         except ValueError as exc:
             raise RuntimeError(
