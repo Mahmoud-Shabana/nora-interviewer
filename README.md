@@ -84,6 +84,8 @@ It separates:
 | Protected system capabilities | ✅ Implemented |
 | End-to-end release regression coverage | ✅ Implemented |
 | Failure/recovery release regression coverage | ✅ Implemented |
+| Organization-scoped OIDC | ✅ Implemented on v0.5 development line |
+| Encrypted artifact storage | ✅ Encrypted local provider + signed access |
 
 ---
 
@@ -1110,6 +1112,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Independent Evidence Judge](docs/EVIDENCE_JUDGE.md)
 - [Authorization Model](docs/AUTHORIZATION.md)
 - [Storage Backends](docs/STORAGE.md)
+- [Encrypted Artifact Storage](docs/ARTIFACT_STORAGE.md)
 - [Session Concurrency & ETags](docs/CONCURRENCY.md)
 - [Session Lifecycle](docs/SESSION_LIFECYCLE.md)
 - [Data Retention](docs/RETENTION.md)
