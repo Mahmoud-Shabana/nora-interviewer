@@ -125,6 +125,9 @@ class EventType(str, Enum):
     VOICE_TRANSPORT_SELECTED = "voice_transport_selected"
     VOICE_TRANSPORT_FALLBACK = "voice_transport_fallback"
     VOICE_VAD_ENDPOINT = "voice_vad_endpoint"
+    ARTIFACT_CREATED = "artifact_created"
+    ARTIFACT_ACCESSED = "artifact_accessed"
+    ARTIFACT_DELETED = "artifact_deleted"
     SESSION_COMPLETED = "session_completed"
     SESSION_CANCELLED = "session_cancelled"
 
@@ -368,6 +371,31 @@ class ToolEvaluation(StrictModel):
     evidence: dict[str, Any] = Field(default_factory=dict)
 
 
+class ArtifactRecord(StrictModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    storage_key: str = Field(min_length=1, max_length=1024)
+    kind: str = Field(min_length=1, max_length=120)
+    media_type: str = Field(min_length=1, max_length=200)
+    size_bytes: int = Field(ge=0)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    created_by: str = Field(min_length=1, max_length=256)
+    deleted_at: datetime | None = None
+    deleted_by: str | None = Field(default=None, max_length=256)
+    deletion_reason: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+
+class ArtifactAccessGrant(StrictModel):
+    artifact_id: str
+    token: str = Field(min_length=1)
+    expires_at: datetime
+
+
 class ToolStep(StrictModel):
     tool_id: str
     evaluation: ToolEvaluation
@@ -432,6 +460,7 @@ class InterviewSession(StrictModel):
     tools: list[ToolInvocation] = Field(default_factory=list)
     tool_submissions: list[ToolSubmission] = Field(default_factory=list)
     tool_evaluations: list[ToolEvaluation] = Field(default_factory=list)
+    artifacts: list[ArtifactRecord] = Field(default_factory=list)
     events: list[InterviewEvent] = Field(default_factory=list)
 
 
