@@ -1,6 +1,6 @@
 # Nora v0.6.0 Development Plan
 
-Status: active — Gate 1 complete  
+Status: active — Gates 1–2 complete  
 Baseline: v0.5.0 release line  
 Current development line: main
 
@@ -28,11 +28,17 @@ No runtime tests or CI were executed; completion refers to implementation and st
 
 ## Gate 2 — Workload/service identity
 
-- [ ] dedicated service-workload JWT resolver
-- [ ] separate service audience and issuer configuration
-- [ ] optional organization scope for workloads
-- [ ] no candidate/recruiter/reviewer role escalation
-- [ ] capability and deployment documentation
+- [x] dedicated service-workload JWT resolver
+- [x] separate service audience and issuer configuration
+- [x] optional organization scope for workloads
+- [x] no candidate/recruiter/reviewer role escalation
+- [x] capability and deployment documentation
+
+### Gate 2 implementation notes
+
+Nora now has a workload-only JWT resolver that always produces the internal service role, separate workload issuer/audience/JWKS configuration, optional organization scoping for service tokens, and a hybrid `oidc+workload` mode that accepts human and machine identity domains without letting workload tokens choose human roles.
+
+No runtime tests or CI were executed; completion refers to implementation and static contract review.
 
 ## Gate 3 — Outbound webhooks
 
