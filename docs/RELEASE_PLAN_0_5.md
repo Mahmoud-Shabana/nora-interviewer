@@ -1,6 +1,6 @@
 # Nora v0.5.0 Development Plan
 
-Status: active — Gates 1–4 complete  
+Status: active — Gates 1–5 complete  
 Baseline: v0.4.0 release line  
 Current development line: main
 
@@ -75,11 +75,19 @@ No runtime tests or CI were executed for this gate because of the current accoun
 
 ## Gate 5 — Arabic technical interview depth
 
-- [ ] Arabic dialect-aware interview fixtures
-- [ ] Arabic/English technical terminology preservation
-- [ ] code-switch-aware transcript metadata
-- [ ] domain vocabulary packs for software/AI/engineering interviews
-- [ ] export fields needed by VoxRubric ASR-preservation evaluation
+- [x] Arabic dialect-aware interview fixtures
+- [x] Arabic/English technical terminology preservation
+- [x] code-switch-aware transcript metadata
+- [x] domain vocabulary packs for software/AI/engineering interviews
+- [x] export fields needed by VoxRubric ASR-preservation evaluation
+
+### Gate 5 implementation notes
+
+Final voice transcripts can now carry explicit locale/dialect metadata, technical vocabulary-pack IDs, benchmark reference text, and critical terms. Nora records Arabic/Latin script profiles and code-switch state on candidate turns, ships software/AI/data Arabic-English vocabulary packs and benchmark fixtures, and exposes VoxRubric-compatible ASR preservation fields in trace metadata.
+
+Dialect labels are explicit metadata only; Nora does not infer dialect or candidate quality from identity, accent, or nationality.
+
+No runtime tests or CI were executed for this gate because of the current account constraint; completion refers to implementation and static contract review.
 
 ## Gate 6 — Developer and deployment experience
 
