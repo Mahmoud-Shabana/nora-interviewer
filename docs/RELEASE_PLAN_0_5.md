@@ -1,6 +1,6 @@
 # Nora v0.5.0 Development Plan
 
-Status: active — Gates 1–3 complete  
+Status: active — Gates 1–4 complete  
 Baseline: v0.4.0 release line  
 Current development line: main
 
@@ -61,11 +61,17 @@ No runtime tests or CI were executed for this gate because of the current accoun
 
 ## Gate 4 — Domain practical evaluators
 
-- [ ] richer coding evaluator contract
-- [ ] data-analysis evaluator
-- [ ] document-analysis evaluator
-- [ ] system-design/case-study evaluator
-- [ ] evaluator provenance and human-review handoff
+- [x] richer coding evaluator contract
+- [x] data-analysis evaluator
+- [x] document-analysis evaluator
+- [x] system-design/case-study evaluator
+- [x] evaluator provenance and human-review handoff
+
+### Gate 4 implementation notes
+
+Nora now has structured domain evaluators for system-design/case-study, document-analysis, and data-analysis artifacts, plus richer coding evaluator provenance tied to sandbox provider/execution metadata. Domain evaluators report structural completeness and grounding signals while leaving final scoring/selection to human review.
+
+No runtime tests or CI were executed for this gate because of the current account constraint; completion refers to implementation and static contract review.
 
 ## Gate 5 — Arabic technical interview depth
 
