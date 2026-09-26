@@ -29,10 +29,16 @@ class RubricWorkflowService:
     async def draft(
         self,
         request: RubricDraftRequest,
+        *,
+        organization_id: str | None = None,
     ) -> RubricDraft:
         draft = await self.drafter.draft(
             request
         )
+        if organization_id is not None:
+            draft = draft.model_copy(
+                update={"organization_id": organization_id},
+            )
         try:
             await self.store.put_rubric_draft(
                 draft
@@ -47,11 +53,21 @@ class RubricWorkflowService:
     async def get(
         self,
         draft_id: str,
+        *,
+        organization_id: str | None = None,
     ) -> RubricDraft:
         draft = await self.store.get_rubric_draft(
             draft_id
         )
         if draft is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Rubric draft not found",
+            )
+        if (
+            organization_id is not None
+            and draft.organization_id != organization_id
+        ):
             raise HTTPException(
                 status_code=404,
                 detail="Rubric draft not found",
@@ -64,9 +80,11 @@ class RubricWorkflowService:
         request: RubricApprovalRequest,
         *,
         approved_by: str,
+        organization_id: str | None = None,
     ) -> RubricApprovalResult:
         draft = await self.get(
-            draft_id
+            draft_id,
+            organization_id=organization_id,
         )
         try:
             approved_draft, job = (
@@ -74,6 +92,7 @@ class RubricWorkflowService:
                     draft,
                     request,
                     approved_by=approved_by,
+                    organization_id=organization_id,
                 )
             )
             await self.store.approve_rubric_draft(
