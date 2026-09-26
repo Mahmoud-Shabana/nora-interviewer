@@ -1,6 +1,6 @@
 # Nora v0.5.0 Development Plan
 
-Status: active — Gates 1–2 complete  
+Status: active — Gates 1–3 complete  
 Baseline: v0.4.0 release line  
 Current development line: main
 
@@ -47,11 +47,17 @@ No runtime tests or CI were executed for this gate because of the current accoun
 
 ## Gate 3 — External sandbox service
 
-- [ ] remote sandbox protocol independent from the API process
-- [ ] job/template policy enforcement before dispatch
-- [ ] resource/time/network policy contract
-- [ ] structured execution result and artifact provenance
-- [ ] graceful unavailable/degraded behavior
+- [x] remote sandbox protocol independent from the API process
+- [x] job/template policy enforcement before dispatch
+- [x] resource/time/network policy contract
+- [x] structured execution result and artifact provenance
+- [x] graceful unavailable/degraded behavior
+
+### Gate 3 implementation notes
+
+Nora now supports a versioned `nora.sandbox.v1` remote execution service in addition to the local Docker development runner. Remote requests carry explicit resource and isolation policy, existing job/template authorization remains ahead of sandbox dispatch, structured execution provenance flows into tool evidence, and transport/protocol failures degrade to manual review instead of becoming false candidate failures.
+
+No runtime tests or CI were executed for this gate because of the current account constraint; completion refers to implementation and static contract review.
 
 ## Gate 4 — Domain practical evaluators
 
