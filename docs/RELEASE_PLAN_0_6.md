@@ -1,6 +1,6 @@
 # Nora v0.6.0 Development Plan
 
-Status: active — Gates 1–4 complete  
+Status: active — Gates 1–5 complete  
 Baseline: v0.5.0 release line  
 Current development line: main
 
@@ -70,11 +70,17 @@ No runtime tests or CI were executed; completion refers to implementation and st
 
 ## Gate 5 — Evidence portability
 
-- [ ] portable evidence bundle schema
-- [ ] artifact/checksum references
-- [ ] audit-chain head and export provenance
-- [ ] organization-scoped bundle access
-- [ ] VoxRubric interoperability notes
+- [x] portable evidence bundle schema
+- [x] artifact/checksum references
+- [x] audit-chain head and export provenance
+- [x] organization-scoped bundle access
+- [x] VoxRubric interoperability notes
+
+### Gate 5 implementation notes
+
+Nora now exports a `nora.evidence.bundle.v1` portable evidence object with active evidence provenance, artifact metadata/checksums, verified audit-chain head, canonical VoxRubric trace digest, and a deterministic bundle digest. Access uses the existing session/organization authorization boundary, and backend artifact storage locations are not exposed.
+
+No runtime tests or CI were executed; completion refers to implementation and static contract review.
 
 ## Gate 6 — Release preparation
 
