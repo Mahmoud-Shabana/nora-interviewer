@@ -469,3 +469,136 @@ class OrganizationOidcPrincipalResolver(JwtJwksPrincipalResolver):
             candidate_ref=candidate_ref,
             organization_id=self.organization_id,
         )
+
+
+
+class WorkloadJwtPrincipalResolver(JwtJwksPrincipalResolver):
+    """JWT resolver dedicated to machine/service identities.
+
+    The resolver never accepts a role claim from the token. A successfully
+    validated workload token becomes a Nora service principal, optionally
+    scoped to one organization.
+    """
+
+    def __init__(
+        self,
+        *,
+        jwks_url: str,
+        issuer: str,
+        audience: str,
+        algorithms: tuple[str, ...] = ("RS256",),
+        principal_claim: str = "sub",
+        organization_claim: str | None = None,
+        leeway_seconds: float = 30.0,
+    ) -> None:
+        super().__init__(
+            jwks_url=jwks_url,
+            issuer=issuer,
+            audience=audience,
+            algorithms=algorithms,
+            principal_claim=principal_claim,
+            role_claim="__workload_role__",
+            candidate_ref_claim="__not_used__",
+            leeway_seconds=leeway_seconds,
+            allow_service_role=False,
+        )
+        self.organization_claim = (
+            organization_claim.strip()
+            if organization_claim
+            else None
+        )
+
+    def _claims_to_principal(
+        self,
+        claims: Mapping[str, object],
+    ) -> Principal:
+        principal_id = claims.get(
+            self.principal_claim
+        )
+        if not isinstance(
+            principal_id,
+            str,
+        ) or not principal_id.strip():
+            raise HTTPException(
+                status_code=401,
+                detail=(
+                    "Workload token is missing the configured "
+                    f"principal claim {self.principal_claim!r}"
+                ),
+                headers={
+                    "WWW-Authenticate": "Bearer"
+                },
+            )
+
+        organization_id = None
+        if self.organization_claim:
+            raw = claims.get(
+                self.organization_claim
+            )
+            if raw is not None:
+                if not isinstance(
+                    raw,
+                    str,
+                ) or not raw.strip():
+                    raise HTTPException(
+                        status_code=403,
+                        detail=(
+                            "Workload organization claim must "
+                            "be a non-empty string"
+                        ),
+                    )
+                organization_id = (
+                    raw.strip()
+                )
+
+        return Principal(
+            id=principal_id.strip(),
+            role=ActorRole.SERVICE,
+            organization_id=organization_id,
+        )
+
+
+class CompositePrincipalResolver:
+    """Resolve one bearer token against multiple trusted identity domains."""
+
+    def __init__(
+        self,
+        resolvers: tuple[
+            PrincipalResolver,
+            ...,
+        ],
+    ) -> None:
+        if not resolvers:
+            raise ValueError(
+                "at least one principal resolver is required"
+            )
+        self.resolvers = resolvers
+
+    def resolve(
+        self,
+        headers: Mapping[str, str],
+    ) -> Principal:
+        last_error: HTTPException | None = None
+        for resolver in self.resolvers:
+            try:
+                return resolver.resolve(
+                    headers
+                )
+            except HTTPException as exc:
+                if exc.status_code not in {
+                    401,
+                    403,
+                }:
+                    raise
+                last_error = exc
+
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "Bearer token was not accepted by any "
+                "configured Nora identity domain"
+            ),
+            headers={
+                "WWW-Authenticate": "Bearer"
+            },
+        ) from last_error
