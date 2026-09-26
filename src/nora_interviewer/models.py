@@ -128,6 +128,7 @@ class EventType(str, Enum):
     ARTIFACT_CREATED = "artifact_created"
     ARTIFACT_ACCESSED = "artifact_accessed"
     ARTIFACT_DELETED = "artifact_deleted"
+    WEBHOOK_DELIVERY = "webhook_delivery"
     SESSION_COMPLETED = "session_completed"
     SESSION_CANCELLED = "session_cancelled"
 
