@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from pydantic import Field, model_validator
 
 from .audit import append_event
+from .language_profiles import build_language_metadata
 from .models import EventType, SessionStatus, StrictModel, ToolInvocation, Turn
 from .service import InterviewService
 from .storage import Store, StoreConflictError
@@ -25,6 +26,15 @@ class VoicePhase(str, Enum):
 class TranscriptEvent(StrictModel):
     text: str = Field(min_length=1, max_length=20_000)
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    locale: str | None = Field(default=None, min_length=2, max_length=32)
+    dialect: str | None = Field(default=None, min_length=2, max_length=80)
+    technical_vocabulary_packs: list[str] = Field(default_factory=list)
+    asr_reference_text: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=20_000,
+    )
+    asr_critical_terms: list[str] = Field(default_factory=list)
 
 
 class TtsLifecycleEvent(StrictModel):
@@ -229,6 +239,21 @@ class RealtimeVoiceCoordinator:
                 now - state.speech_started_at_ms,
             )
 
+        try:
+            language_metadata = build_language_metadata(
+                event.text,
+                locale=event.locale or session.locale,
+                dialect=event.dialect,
+                pack_ids=event.technical_vocabulary_packs,
+                reference_text=event.asr_reference_text,
+                critical_terms=event.asr_critical_terms,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=str(exc),
+            ) from exc
+
         append_event(
             session,
             EventType.VOICE_TRANSCRIPT_FINAL,
@@ -237,13 +262,18 @@ class RealtimeVoiceCoordinator:
                 "confidence": event.confidence,
                 "generation": state.generation,
                 "speech_to_final_ms": state.last_speech_to_final_ms,
+                "language_metadata": language_metadata,
             },
         )
         await self._persist(session)
 
         state.phase = VoicePhase.PROCESSING
         response_started = self._now_ms()
-        step = await self.service.answer(session_id, event.text)
+        step = await self.service.answer(
+            session_id,
+            event.text,
+            turn_metadata=language_metadata,
+        )
         response_ready = self._now_ms()
         state.last_final_to_response_ms = max(
             0,
