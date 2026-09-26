@@ -1,6 +1,6 @@
 # Nora v0.6.0 Development Plan
 
-Status: active — Gates 1–2 complete  
+Status: active — Gates 1–3 complete  
 Baseline: v0.5.0 release line  
 Current development line: main
 
@@ -42,11 +42,17 @@ No runtime tests or CI were executed; completion refers to implementation and st
 
 ## Gate 3 — Outbound webhooks
 
-- [ ] signed webhook delivery contract
-- [ ] organization-scoped subscriptions
-- [ ] bounded retry/idempotency metadata
-- [ ] auditable delivery state
-- [ ] privacy-safe event payload policy
+- [x] signed webhook delivery contract
+- [x] organization-scoped subscriptions
+- [x] bounded retry/idempotency metadata
+- [x] auditable delivery state
+- [x] privacy-safe event payload policy
+
+### Gate 3 implementation notes
+
+Session persistence can now be decorated with signed outbound webhook delivery. Subscriptions are organization-scoped deployment configuration, payloads expose only privacy-minimized lifecycle metadata, HMAC signatures and deterministic idempotency keys are included, retry behavior is bounded, and delivery results are recorded as non-recursive audit events.
+
+No runtime tests or CI were executed; completion refers to implementation and static contract review.
 
 ## Gate 4 — Provider resilience
 
