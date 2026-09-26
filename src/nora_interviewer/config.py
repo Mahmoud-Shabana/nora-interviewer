@@ -13,8 +13,10 @@ from .authorization import ActorRole
 from .authn import (
     DisabledPrincipalResolver,
     DevHeaderPrincipalResolver,
+    CompositePrincipalResolver,
     JwtJwksPrincipalResolver,
     OrganizationOidcPrincipalResolver,
+    WorkloadJwtPrincipalResolver,
 )
 from .evidence_ensemble import EvidenceJudgeEnsemble
 from .evidence_judge import DisabledEvidenceJudge, LLMEvidenceJudge
@@ -381,6 +383,245 @@ def build_rubric_drafter():
     )
 
 
+
+def _build_workload_principal_resolver():
+    jwks_url = os.getenv(
+        "NORA_WORKLOAD_JWKS_URL",
+        "",
+    ).strip()
+    issuer = os.getenv(
+        "NORA_WORKLOAD_ISSUER",
+        "",
+    ).strip()
+    audience = os.getenv(
+        "NORA_WORKLOAD_AUDIENCE",
+        "",
+    ).strip()
+    algorithms = tuple(
+        item.strip()
+        for item in os.getenv(
+            "NORA_WORKLOAD_ALGORITHMS",
+            "RS256",
+        ).split(",")
+        if item.strip()
+    )
+    allow_insecure = os.getenv(
+        "NORA_WORKLOAD_ALLOW_INSECURE_JWKS",
+        "false",
+    ).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not jwks_url or not issuer or not audience:
+        raise RuntimeError(
+            "NORA_WORKLOAD_JWKS_URL, NORA_WORKLOAD_ISSUER, and "
+            "NORA_WORKLOAD_AUDIENCE are required for workload JWT auth"
+        )
+    if (
+        not jwks_url.startswith("https://")
+        and not allow_insecure
+    ):
+        raise RuntimeError(
+            "NORA_WORKLOAD_JWKS_URL must use https:// unless "
+            "NORA_WORKLOAD_ALLOW_INSECURE_JWKS=true"
+        )
+    try:
+        leeway_seconds = float(
+            os.getenv(
+                "NORA_WORKLOAD_LEEWAY_SECONDS",
+                "30",
+            )
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            "NORA_WORKLOAD_LEEWAY_SECONDS must be numeric"
+        ) from exc
+    if leeway_seconds < 0 or leeway_seconds > 300:
+        raise RuntimeError(
+            "NORA_WORKLOAD_LEEWAY_SECONDS must be between 0 and 300"
+        )
+
+    organization_claim = os.getenv(
+        "NORA_WORKLOAD_ORGANIZATION_CLAIM"
+    )
+    try:
+        return WorkloadJwtPrincipalResolver(
+            jwks_url=jwks_url,
+            issuer=issuer,
+            audience=audience,
+            algorithms=algorithms,
+            principal_claim=os.getenv(
+                "NORA_WORKLOAD_PRINCIPAL_CLAIM",
+                "sub",
+            ).strip() or "sub",
+            organization_claim=(
+                organization_claim.strip()
+                if organization_claim
+                and organization_claim.strip()
+                else None
+            ),
+            leeway_seconds=leeway_seconds,
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Invalid workload JWT configuration: {exc}"
+        ) from exc
+
+
+def _build_oidc_principal_resolver():
+    jwks_url = os.getenv(
+        "NORA_OIDC_JWKS_URL",
+        "",
+    ).strip()
+    issuer = os.getenv(
+        "NORA_OIDC_ISSUER",
+        "",
+    ).strip()
+    audience = os.getenv(
+        "NORA_OIDC_AUDIENCE",
+        "",
+    ).strip()
+    organization_id = os.getenv(
+        "NORA_OIDC_ORGANIZATION_ID",
+        "",
+    ).strip()
+    raw_role_mapping = os.getenv(
+        "NORA_OIDC_ROLE_MAPPING",
+        "",
+    ).strip()
+    algorithms = tuple(
+        item.strip()
+        for item in os.getenv(
+            "NORA_OIDC_ALGORITHMS",
+            "RS256",
+        ).split(",")
+        if item.strip()
+    )
+    allow_insecure = os.getenv(
+        "NORA_OIDC_ALLOW_INSECURE_JWKS",
+        "false",
+    ).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if (
+        not jwks_url
+        or not issuer
+        or not audience
+        or not organization_id
+        or not raw_role_mapping
+    ):
+        raise RuntimeError(
+            "NORA_OIDC_JWKS_URL, NORA_OIDC_ISSUER, "
+            "NORA_OIDC_AUDIENCE, NORA_OIDC_ORGANIZATION_ID, and "
+            "NORA_OIDC_ROLE_MAPPING are required for OIDC auth"
+        )
+    if (
+        not jwks_url.startswith("https://")
+        and not allow_insecure
+    ):
+        raise RuntimeError(
+            "NORA_OIDC_JWKS_URL must use https:// unless "
+            "NORA_OIDC_ALLOW_INSECURE_JWKS=true"
+        )
+    try:
+        raw_mapping = json.loads(
+            raw_role_mapping
+        )
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            "NORA_OIDC_ROLE_MAPPING must be a JSON object"
+        ) from exc
+    if not isinstance(
+        raw_mapping,
+        dict,
+    ):
+        raise RuntimeError(
+            "NORA_OIDC_ROLE_MAPPING must be a JSON object"
+        )
+    role_mapping = {}
+    for external, role_name in raw_mapping.items():
+        if not isinstance(
+            external,
+            str,
+        ) or not isinstance(
+            role_name,
+            str,
+        ):
+            raise RuntimeError(
+                "NORA_OIDC_ROLE_MAPPING keys and values must be strings"
+            )
+        try:
+            role_mapping[
+                external
+            ] = ActorRole(
+                role_name.strip().lower()
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                "NORA_OIDC_ROLE_MAPPING contains an unknown Nora role"
+            ) from exc
+
+    try:
+        leeway_seconds = float(
+            os.getenv(
+                "NORA_OIDC_LEEWAY_SECONDS",
+                "30",
+            )
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            "NORA_OIDC_LEEWAY_SECONDS must be numeric"
+        ) from exc
+    if leeway_seconds < 0 or leeway_seconds > 300:
+        raise RuntimeError(
+            "NORA_OIDC_LEEWAY_SECONDS must be between 0 and 300"
+        )
+
+    try:
+        return OrganizationOidcPrincipalResolver(
+            jwks_url=jwks_url,
+            issuer=issuer,
+            audience=audience,
+            organization_id=organization_id,
+            organization_claim=os.getenv(
+                "NORA_OIDC_ORGANIZATION_CLAIM",
+                "org_id",
+            ).strip() or "org_id",
+            groups_claim=os.getenv(
+                "NORA_OIDC_GROUPS_CLAIM",
+                "groups",
+            ).strip() or "groups",
+            role_mapping=role_mapping,
+            algorithms=algorithms,
+            principal_claim=os.getenv(
+                "NORA_OIDC_PRINCIPAL_CLAIM",
+                "sub",
+            ).strip() or "sub",
+            candidate_ref_claim=os.getenv(
+                "NORA_OIDC_CANDIDATE_REF_CLAIM",
+                "candidate_ref",
+            ).strip() or "candidate_ref",
+            candidate_ref_from_subject=os.getenv(
+                "NORA_OIDC_CANDIDATE_REF_FROM_SUBJECT",
+                "true",
+            ).strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            },
+            leeway_seconds=leeway_seconds,
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Invalid OIDC configuration: {exc}"
+        ) from exc
+
 def build_principal_resolver():
     """Build the HTTP principal resolver.
 
@@ -407,6 +648,15 @@ def build_principal_resolver():
 
     if mode == "dev-header":
         return DevHeaderPrincipalResolver()
+
+    if mode == "workload-jwt":
+        return _build_workload_principal_resolver()
+
+    if mode == "oidc+workload":
+        return CompositePrincipalResolver((
+            _build_oidc_principal_resolver(),
+            _build_workload_principal_resolver(),
+        ))
 
     if mode == "oidc":
         jwks_url = os.getenv(
