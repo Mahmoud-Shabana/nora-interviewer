@@ -499,7 +499,6 @@ class ArtifactService:
         deleted_by: str = "retention",
         reason: str = "session_retention",
     ) -> int:
-        self._require_enabled()
         session = await self._session(
             session_id
         )
@@ -508,6 +507,9 @@ class ArtifactService:
             for item in session.artifacts
             if item.deleted_at is None
         ]
+        if not active:
+            return 0
+        self._require_enabled()
 
         for artifact in active:
             try:
