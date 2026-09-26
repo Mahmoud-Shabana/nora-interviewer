@@ -86,6 +86,7 @@ It separates:
 | Failure/recovery release regression coverage | ✅ Implemented |
 | Organization-scoped OIDC | ✅ Implemented on v0.5 development line |
 | Encrypted artifact storage | ✅ Encrypted local provider + signed access |
+| External sandbox service | ✅ `nora.sandbox.v1` remote runner |
 
 ---
 
@@ -1113,6 +1114,7 @@ Nora is intentionally conservative around high-stakes behavior.
 - [Authorization Model](docs/AUTHORIZATION.md)
 - [Storage Backends](docs/STORAGE.md)
 - [Encrypted Artifact Storage](docs/ARTIFACT_STORAGE.md)
+- [External Sandbox Service](docs/SANDBOX_SERVICE.md)
 - [Session Concurrency & ETags](docs/CONCURRENCY.md)
 - [Session Lifecycle](docs/SESSION_LIFECYCLE.md)
 - [Data Retention](docs/RETENTION.md)
@@ -1197,7 +1199,7 @@ Nora is intentionally conservative around high-stakes behavior.
 
 - [ ] Organization-specific OIDC login/session integration
 - [ ] encrypted object storage
-- [ ] external sandbox service
+- [x] external sandbox service
 - [ ] richer domain-specific practical evaluators
 - [ ] Arabic dialect and technical-ASR benchmarks
 
