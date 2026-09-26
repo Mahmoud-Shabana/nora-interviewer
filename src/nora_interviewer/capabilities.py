@@ -32,6 +32,7 @@ class SystemCapabilities(StrictModel):
     organization_oidc_auth: bool = False
     workload_jwt_auth: bool = False
     hybrid_identity_auth: bool = False
+    outbound_webhooks: bool = False
     evidence_judge_ensemble: bool = False
     streaming_stt_enabled: bool = False
     streaming_stt_backend: str = "DisabledStreamingSpeechProvider"
@@ -116,6 +117,10 @@ def describe_capabilities(
         hybrid_identity_auth=(
             type(principal_resolver).__name__
             == "CompositePrincipalResolver"
+        ),
+        outbound_webhooks=(
+            type(store).__name__
+            == "WebhookDispatchingStore"
         ),
         interview_brain=type(service.brain).__name__,
         evidence_judge_enabled=(
