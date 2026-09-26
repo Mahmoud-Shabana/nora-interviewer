@@ -8,11 +8,15 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, 
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
+from .artifact_service import ArtifactService
+from .artifact_storage import ArtifactStorageError
 from .audio_stream_manager import AudioStreamManager
 from .authorization import AccessPolicy, Permission, Principal
 from .capabilities import SystemCapabilities, describe_capabilities
 from .coding import CodingChallengeRequest
 from .config import (
+    build_artifact_service,
+    build_artifact_store,
     build_brain,
     build_evidence_judge,
     build_operational_slo_policy,
@@ -34,6 +38,8 @@ from .operations import (
 )
 from .models import (
     AppealReviewRequest,
+    ArtifactAccessGrant,
+    ArtifactRecord,
     AppealReviewSubmission,
     CandidateAppeal,
     CandidateAppealRequest,
@@ -149,6 +155,11 @@ from .web import (
 API_VERSION = "0.5.0-dev"
 
 store = build_store()
+artifact_store = build_artifact_store()
+artifact_service = build_artifact_service(
+    store=store,
+    object_store=artifact_store,
+)
 service = InterviewService(
     store=store,
     brain=build_brain(),
@@ -161,7 +172,10 @@ rubric_service = RubricWorkflowService(
     store=store,
     drafter=rubric_drafter,
 )
-retention = RetentionManager(store)
+retention = RetentionManager(
+    store,
+    artifact_service=artifact_service,
+)
 review_service = ReviewService(store=store)
 raw_streaming_speech_provider = build_streaming_speech_provider()
 raw_streaming_tts_provider = build_streaming_tts_provider()
@@ -787,6 +801,113 @@ async def create_session(
         organization_id=principal.organization_id,
     )
 
+
+
+@app.post(
+    "/v1/sessions/{session_id}/artifacts",
+    response_model=ArtifactRecord,
+    status_code=201,
+)
+async def create_artifact(
+    session_id: str,
+    request: Request,
+    kind: str,
+    media_type: str = "application/octet-stream",
+    principal: Principal = Depends(current_principal),
+) -> ArtifactRecord:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.CREATE_ARTIFACT,
+    )
+    data = await request.body()
+    return await artifact_service.create(
+        session_id,
+        data=data,
+        kind=kind,
+        media_type=media_type,
+        created_by=principal.id,
+    )
+
+
+@app.get(
+    "/v1/sessions/{session_id}/artifacts",
+    response_model=list[ArtifactRecord],
+)
+async def list_artifacts(
+    session_id: str,
+    principal: Principal = Depends(current_principal),
+) -> list[ArtifactRecord]:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.READ_ARTIFACT,
+    )
+    return await artifact_service.list(
+        session_id
+    )
+
+
+@app.post(
+    "/v1/sessions/{session_id}/artifacts/{artifact_id}/access",
+    response_model=ArtifactAccessGrant,
+)
+async def issue_artifact_access(
+    session_id: str,
+    artifact_id: str,
+    principal: Principal = Depends(current_principal),
+) -> ArtifactAccessGrant:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.READ_ARTIFACT,
+    )
+    return await artifact_service.issue_access(
+        session_id,
+        artifact_id,
+    )
+
+
+@app.get(
+    "/v1/artifacts/content",
+)
+async def read_artifact_content(
+    token: str,
+) -> Response:
+    artifact, data = await artifact_service.read_token(
+        token
+    )
+    return Response(
+        content=data,
+        media_type=artifact.media_type,
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@app.delete(
+    "/v1/sessions/{session_id}/artifacts/{artifact_id}",
+    response_model=ArtifactRecord,
+)
+async def delete_artifact(
+    session_id: str,
+    artifact_id: str,
+    reason: str | None = None,
+    principal: Principal = Depends(current_principal),
+) -> ArtifactRecord:
+    await require_session_permission(
+        session_id,
+        principal,
+        Permission.DELETE_ARTIFACT,
+    )
+    return await artifact_service.delete(
+        session_id,
+        artifact_id,
+        deleted_by=principal.id,
+        reason=reason,
+    )
 
 @app.post(
     "/v1/sessions/{session_id}/cancel",
