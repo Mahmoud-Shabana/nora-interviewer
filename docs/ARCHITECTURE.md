@@ -189,7 +189,7 @@ Production deployments should additionally provide encrypted object storage, ded
 
 ## Threat boundaries
 
-Nora v0.5 makes several trust boundaries explicit.
+Nora v0.6 maintains the v0.5 trust boundaries and adds explicit integration, workload, resilience, and portability boundaries.
 
 ### Identity boundary
 
@@ -244,4 +244,51 @@ flowchart LR
     SB -. execution provenance .-> DB
     STT -. language metadata .-> DB
     Export --> Vox[VoxRubric]
+```
+
+
+## v0.6 integration boundaries
+
+### Workload identity boundary
+
+Human OIDC and service workload JWTs use distinct issuer/audience configuration. Human group mapping cannot grant the internal service role. A service workload can carry an organization scope; when present, that scope is enforced on session access.
+
+### Managed object-store boundary
+
+The S3-compatible artifact provider preserves Nora's object-store abstraction while requiring server-side encryption on writes. The API never derives authorization from bucket/object keys, and portable evidence exports do not expose storage keys.
+
+### Webhook boundary
+
+Outbound webhooks are emitted only for an allowlisted event set. Raw audit payloads, transcript text, candidate answers, artifact contents, evidence quotes, candidate references, and integrity details are not copied into webhook bodies.
+
+Webhook signing secrets are independent from artifact access/encryption secrets.
+
+### Provider resilience boundary
+
+Brain/Judge/Rubric completion providers and the remote sandbox have bounded timeout/retry/circuit contracts. Circuit state is observable without exposing provider credentials or prompt content.
+
+Fallback decisions retain degraded-mode provenance so provider failure is visible in audit/export metadata.
+
+### Evidence portability boundary
+
+`nora.evidence.bundle.v1` exports active evidence provenance plus cryptographic anchors to artifacts, the audit chain, and VoxRubric output. Backend object locations remain private.
+
+## v0.6 data flow
+
+```mermaid
+flowchart LR
+    Human[Human Client] --> OIDC[Organization OIDC]
+    Workload[Service Workload] --> WID[Workload JWT]
+    OIDC --> API[Nora API]
+    WID --> API
+    API --> DB[(PostgreSQL / Store)]
+    API --> S3[S3-compatible Artifact Store]
+    API --> Sandbox[Remote Sandbox]
+    API --> Providers[Brain / Judge / Rubric Providers]
+    DB --> Hooks[Signed Webhooks]
+    DB --> Bundle[Portable Evidence Bundle]
+    DB --> Vox[VoxRubric Trace]
+    Providers --> Resilience[Retry / Circuit State]
+    Sandbox --> Resilience
+    Resilience --> Ops[System Resilience Endpoint]
 ```
